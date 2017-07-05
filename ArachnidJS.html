@@ -15,7 +15,7 @@
 
 /******************************************************************************
 * TODO
-* Drag'n drop
+* Drag'n drop (and split straights)
 * remove whole suits
 * undo
 * 
@@ -167,7 +167,7 @@ html, body {
 .spotC4 { position: absolute; left: 2.50em; top: 2.5em; }
 .spotC5 { position: absolute; left: 2.50em; top: 3.5em; }
 	</style>
-	<script type="text/javascript">
+	<script>
 
 /******************************************************************************
 * ArachnidJS                                                                  *
@@ -221,6 +221,11 @@ html, body {
 //		findBottomStraight(): find last card and its straight, return a Stack object
 //		click(): handle the click event on column
 //		unhideLast(): unhide last card
+//		isSuitable(newCard, mode) : return boolean, true if the card is suitable to this column
+//				mode=0 same suit
+//				mode=1 any suit
+//				mode=2 empty columns
+//				mode=99 any mode
 //	(specific to straight)
 //		moveStraight(oStraight, oCol): Move a straight (oStraight) from this column into an other (oCol)
 //		flashAll(): Flash all cards
@@ -743,6 +748,7 @@ Stack.prototype.click = function() {
 	for (myMode = 0; myMode < 3; myMode++) { // first try : same suit, then any suit, then empty columns
 		for (iCol = 0; iCol < 10; iCol++) {
 			col = cols[iCol];
+/* to be deleted
 			if (myMode == 2) {
 				if (col.cards.length > 0) continue;
 			} else {
@@ -751,6 +757,8 @@ Stack.prototype.click = function() {
 				if (myMode == 0 && card.suit != higherCard.suit) continue;
 				if (card.rank != (higherCard.rank + 1)) continue;
 			}
+*/
+			if (!col.isSuitable(higherCard, myMode)) continue;
 			// got a suitable destination, do the move
 			this.moveStraight(s, col);
 			this.unhideLast();
@@ -773,12 +781,37 @@ Stack.prototype.moveStraight = function(oStraight, oCol) {
 }
 
 //-----------------------------------------------------------------------------
+// Drop a straight (oStraight) here
+//-----------------------------------------------------------------------------
+Stack.prototype.dropStraight = function(oStraight) {
+	for (var i = oStraight.cards.length - 1; i >= 0; i--) {
+		var myCard = oStraight.cards[i];
+		console.log('drop' + myCard.cardToString() + ' to ' + this.elt.id);
+		this.addCard(myCard);
+	}
+}
+
+//-----------------------------------------------------------------------------
 // unhide last card
 //-----------------------------------------------------------------------------
 Stack.prototype.unhideLast = function() {
 	var c = this.lastCard();
 	if (c == undefined) return;
 	c.unhide();
+}
+
+//-----------------------------------------------------------------------------
+// check if a card is suitable to this column
+//-----------------------------------------------------------------------------
+Stack.prototype.isSuitable = function(newCard, mode) {
+//	mode=0 same suit;  mode=1 any suit;  mode=2 empty columns;  mode=99 any mode
+		if (this.cards.length == 0) return mode >= 2;	// empty, ok for modes 2 & 99
+		if (mode == 2) return false;
+		card = this.lastCard();
+		if (card == undefined) return false;
+		if (mode == 0 && card.suit != newCard.suit) return false;
+		if (card.rank != (newCard.rank + 1)) return false;
+		return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -813,13 +846,16 @@ Stack.prototype.flashAll = function() {
 //-----------------------------------------------------------------------------
 function DragDrop(ev) {	// arg : event of the mouseDown
 	var e, target;
+	// store date
+	if (ev.timeStamp) this.tsStart = ev.timeStamp
+	else this.tsStart = +new Date();	// "+" convert date object to timestamp
 	//find card or Stack to move
 	ev         = ev || window.event;
 	/*
 	We are setting target to whatever item the mouse is currently on
 	Firefox uses event.target here, MSIE uses event.srcElement
 	*/
-	target   = ev.target || ev.srcElement;
+	target = ev.target || ev.srcElement;
 	for (e = target; e != undefined; e = e.parentNode) {
 		if (e.oCard == undefined) continue;
 		var oCard = e.oCard;
@@ -833,7 +869,7 @@ function DragDrop(ev) {	// arg : event of the mouseDown
 	this.xOffset = this.oCol.elt.offsetLeft - mousePos.x;
 	// find bottom straight
 	this.straight = this.oCol.findBottomStraight();
-	console.log('col=' + this.oCol.elt.id + ', Xmouse=' + mousePos.x + ', Ymouse=' + mousePos.y + ', lgStraight=' + this.straight.cards.length + ', offsetLeft of col=' + this.oCol.elt.offsetLeft + ', offsetTop of fistCard=' + this.straight.cards[this.straight.cards.length - 1].elt.offsetTop);
+	console.log('new DragDrop, col=' + this.oCol.elt.id + ', Xmouse=' + mousePos.x + ', Ymouse=' + mousePos.y + ', lgStraight=' + this.straight.cards.length + ', offsetLeft of col=' + this.oCol.elt.offsetLeft + ', offsetTop of fistCard=' + this.straight.cards[this.straight.cards.length - 1].elt.offsetTop);
 	this.yOffset = this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + this.oCol.elt.offsetTop - mousePos.y;
 	// remove from column
 	for (var i = this.straight.cards.length - 1; i >= 0; i--) {
@@ -884,22 +920,39 @@ DragDrop.prototype.mouseUp = function(ev) {
 	if (this.oCol) console.log('strait from column ' + this.oCol.n + ' dropped on column ' + (newCol ? newCol.n : '<none>'));
 	// no column : put it back
 	if (!newCol) {
+		window.console.log('DragDrop.mouseUp, no newCol, back');
 		this.moveBackOrig();
 	} else if (this.oCol == newCol) {
-		this.doClick();
-	} else {
+		var tdNow;
+		if (ev.timeStamp) tsNow = ev.timeStamp;
+		else tsNow = +new Date();
+		window.console.log('DragDrop.mouseUp, same column, time(ms)=' + (tsNow - this.tsStart) + ', ev.timeStamp=' + ev.timeStamp + ', new Date=' + (+new Date()) + ', this.tsStart=' + this.tsStart + ', tsNow=' + tsNow);
+		if (tsNow < this.tsStart + 300) this.doClick();
+		else this.moveBackOrig();
+	} else if (this.straight !== undefined) {
+		var higherCard = this.straight.cards[this.straight.cards.length - 1];
+		if (newCol.isSuitable(higherCard, 99)) {
+			newCol.dropStraight(this.straight);
+			this.oCol.unhideLast();
+			window.console.log('DragDrop.mouseUp, drop here');
+		} else {
+			window.console.log('DragDrop.mouseUp, not suitable');
+			this.moveBackOrig();
+		}
 	}
 	ddrop = undefined;
 }
 
 DragDrop.prototype.moveBackOrig = function() {
 	if (this.straight === undefined) return;
+	this.oCol.dropStraight(this.straight);
+/* to be deleted
 	for (var i = this.straight.cards.length - 1; i >= 0; i--) {
 		var myCard = this.straight.cards[i];
 		console.log('send back ' + myCard.cardToString() + ' to ' + this.oCol.elt.id);
 		this.oCol.addCard(myCard);
 	}
-
+*/
 }
 
 DragDrop.prototype.doClick = function() {
@@ -936,7 +989,7 @@ var ddrop;	// dragDrop object, undefined when there is no active drag'n drop
 //-----------------------------------------------------------------------------
 // global constants
 //-----------------------------------------------------------------------------
-var leftMargin = 10;		// from left of backgrounf to left of first column
+var leftMargin = 10;		// from left of background to left of first column
 var columnSpacing = 102;	// from left of a column to left of next column
 
 //-----------------------------------------------------------------------------
@@ -1004,7 +1057,10 @@ function newGame() {
 // mouse event handlers
 //-----------------------------------------------------------------------------
 function mouseUp(ev){
-	if (ddrop) ddrop.mouseUp(ev);
+	if (ddrop) {
+		ddrop.mouseUp(ev);
+		window.console.log('delete ddrop');
+	}
 	ddrop = undefined;
 }
 
@@ -1013,16 +1069,16 @@ function mouseMove(ev){
 }
 
 function mouseDown(ev){
-	if(!ddrop) ddrop = new DragDrop(ev);
+	if (!ddrop) ddrop = new DragDrop(ev);
 }
 
 
 	</script>
 </head>
-<body onload="javascript:initA();">
+<body onload="initA();">
 <div id="bkground">
-<div id="deal" class="but" onclick="javascript:dealRow()">Deal row</div>
-<div id="new"  class="but" onclick="javascript:newGame()">New game</div>
+<div id="deal" class="but" onclick="dealRow()">Deal row</div>
+<div id="new"  class="but" onclick="newGame()">New game</div>
 <div id="dealt"  class="topinfo"></div>
 <div id="col0" class="column"></div>
 <div id="col1" class="column"></div>
