@@ -5,17 +5,20 @@
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 	<style type="text/css">
 /******************************************************************************
-* TODO
-* Drag'n drop
-* remove whole suits
-* 
+* ArachnidJS                                                                  *
+* (C) AlainArachnid GPL V2                                                    *
+* see https://github.com/AlainArachnid/ArachnidJS                             *
+*                                                                             *
+* Initial cards library & css: Copyright 2001 by Mike Hall                    *
+* Please see http://www.brainjar.com for terms of use.                        *
 ******************************************************************************/
 
 /******************************************************************************
-* Playing Card Styles                                                         *
-*                                                                             *
-* Copyright 2001 by Mike Hall                                                 *
-* Please see http://www.brainjar.com for terms of use.                        *
+* TODO
+* Drag'n drop
+* remove whole suits
+* undo
+* 
 ******************************************************************************/
 
 html, body {
@@ -43,6 +46,11 @@ html, body {
 	padding: 5px;
 }
 
+.topinfo {
+	position: absolute;
+	padding: 5px;
+}
+
 #deal {
 	top: 10px;
 	left: 10px;
@@ -51,6 +59,11 @@ html, body {
 #new {
 	top: 10px;
 	right: 20px;
+}
+
+#dealt {
+	top: 10px;
+	left: 100px;
 }
 
 .column {
@@ -167,9 +180,85 @@ html, body {
 * Release under GPL xxxxx                            .                        *
 ******************************************************************************/
 
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Documentation on JS objects
+//
+/////////////////////////////////
+//	Card
+/////////////////////////////////
+//	Constructor
+//		Card(rank, suit)
+//	Properties
+//		rank: 1 (ace) to 13 (king)
+//		suit: "Clubs" or "Diamonds" or "Hearts" or "Spades"
+//	Methods
+//		setColumn(oCol, iPos): link to column oCol at position iPos
+//		flash(): flash the card (indicate move impossible)
+//		unhide()
+//		cardToString(): Returns the name of a card (including rank and suit) as a text string
+//		createNode(): Returns a DIV node which can be used to display the card on a page.
+//
+/////////////////////////////////
+//	Stack (used for desk (that is: cards that are not in columns), for columns and for straights)
+/////////////////////////////////
+//	Constructor
+//		Stack()
+//	Properties
+//		cards: array of card objects
+//	Methods
+//		clear(): empty stack (handle DHTML objects)
+//		draw(n):	Removes the first card in the stack and returns it (not used)
+//		addCard(oCard):	Adds the given card to the stack, returns the index of the card in the stack
+//		combine(oOther):	Adds the cards in the given stack to the current one, the given stack (oOther) is emptied. (not used)
+//		cardCount():	Returns the number of cards currently in the stack
+//		lastCard():	Returns last card's object
+//	(specific to desk)
+//		makeDeck(n): Initializes a stack using n packs of cards
+//		shuffle(n):	Shuffles a stack of cards 'n' times
+//		deal():	Removes the first card in the stack and returns it
+//	(specific to column)
+//		mkColumn(n): upgrade a Stack object into column by linking to the <div> for this column
+//		findBottomStraight(): find last card and its straight, return a Stack object
+//		click(): handle the click event on column
+//		unhideLast(): unhide last card
+//	(specific to straight)
+//		moveStraight(oStraight, oCol): Move a straight (oStraight) from this column into an other (oCol)
+//		flashAll(): Flash all cards
+
+//
+/////////////////////////////////
+//	DragDrop
+/////////////////////////////////
+//	Constructor
+//		DragDrop(ev):	ev is the argument of a mouseDown event
+//	Properties
+//		oCol:	stack object for the "from" column
+//		straight: stack object for the straight being dragged
+//		xOffset : offset between mouse pointer and left of card when dragging
+//		yOffset : offset between mouse pointer and top of card when dragging
+//	Methods
+//		mouseUp(ev):	handled the mouseUp event, drop the strait
+//		moveBackOrig():	returns the straight to its original position
+//		doClick():	handles a click (case when the user "clicks", this is NOT a drag'n drop)
+//		mouseMove(ev):	handled a move of the mouse
+//		moveTo(oPos):	moves the straight to the specified position (oPos has x & y properties)
+//
+/////////////////////////////////
+//	Static functions
+/////////////////////////////////
+//		mouseCoords(ev):	returns an object with x & y properties (coord of the click for the ev, which is the argument of a mouseXXX event)
+//		initA():		initialization (body.onload)
+//		dealRow():		deal a row (add a card taken from desk into each column)
+//		showDealt():	display the count of already dealt
+//		newGame():		new game
+//		mouseUp(ev), mouseMove(ev), mouseDown(ev)	mouse handlers (on whole HTML page)
+//
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 //=============================================================================
 // Card Object (derived from by Mike Hall work)
-//	ABR : changed the rank property from a string ('1' to '9', 'K', etc.) to numeric (1 to 9, 11=J, 12=D, 13=K), easier to handle straights
+//	Alain : changed the rank property from a string ('1' to '9', 'K', etc.) to numeric (1 to 9, 11=J, 12=D, 13=K), easier to handle straights
 //=============================================================================
 
 //-----------------------------------------------------------------------------
@@ -183,15 +272,21 @@ function Card(rank, suit) {
 
 //-----------------------------------------------------------------------------
 // link to a column
+// ARGS
+//	oCol : HTML div element
+//	iPos : position of the card into the column
 //-----------------------------------------------------------------------------
 Card.prototype.setColumn = function(oCol, iPos) {
+	//console.log('set oCol(' + oCol.elt.id + ') to card ' + this.cardToString());
 	this.oCol = oCol;
 	if (this.elt == undefined) {
 		this.elt = this.createNode();
+		this.elt.oCard = this;	// back link from HTML element to javascript object
 	}
 	if (this.elt.parentNode) this.elt.parentNode.removeChild(this.elt);
 	oCol.elt.appendChild(this.elt);
 	this.elt.style.top = (iPos * 40) + 'px';
+	this.elt.style.left = 0;
 	this.elt.style.zIndex = iPos;
 }
 
@@ -546,11 +641,11 @@ Stack.prototype.draw = function(n) {
 	var oCard;
 
 	if (n >= 0 && n < this.cards.length) {
-	oCard = this.cards[n];
-	this.cards.splice(n, 1);
+		oCard = this.cards[n];
+		this.cards.splice(n, 1);
 	}
 	else
-	oCard = null;
+		oCard = null;
 
 	return oCard;
 }
@@ -567,13 +662,13 @@ Stack.prototype.addCard = function(oCard) {
 }
 
 //-----------------------------------------------------------------------------
-// stackCombine(stack): Adds the cards in the given stack to the current one.
-// The given stack is emptied.
+// stackCombine(oOther): Adds the cards in the given stack to the current one.
+// The given stack (oOther) is emptied.
 //-----------------------------------------------------------------------------
 
-Stack.prototype.combine = function(stack) {
-	this.cards = this.cards.concat(stack.cards);
-	stack.cards = new Array();
+Stack.prototype.combine = function(oOther) {
+	this.cards = this.cards.concat(oOther.cards);
+	oOther.cards = new Array();
 }
 
 //-----------------------------------------------------------------------------
@@ -590,13 +685,15 @@ Stack.prototype.cardCount = function() {
 Stack.prototype.mkColumn = function(n) {
 	this.n = n;
 	this.elt = document.getElementById('col' + n);
-	this.elt.style.left = (10 + n *102) + 'px';
+	this.elt.style.left = (leftMargin + n * columnSpacing) + 'px';
 	this.elt.stack = this;	// memorize Stack object into the div element
+	/*
 	if (this.elt.addEventListener) {
 		this.elt.addEventListener("click", function(){this.stack.click();}, false);
 	} else {
 		this.elt.attachEvent('onclick', function(){this.stack.click();});
 	}
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -664,14 +761,14 @@ Stack.prototype.click = function() {
 }
 
 //-----------------------------------------------------------------------------
-// Move a straight (s) from this column into an other (c)
+// Move a straight (oStraight) from this column into an other (oCol)
 //-----------------------------------------------------------------------------
-Stack.prototype.moveStraight = function(s, col) {
-	for (var i = s.cards.length - 1; i >= 0; i--) {
-		var myCard = s.cards[i];
+Stack.prototype.moveStraight = function(oStraight, oCol) {
+	for (var i = oStraight.cards.length - 1; i >= 0; i--) {
+		var myCard = oStraight.cards[i];
 		this.cards.pop();
-		col.addCard(myCard);	// loop with decreasing index so that the order is good here
-		//myCard.setColumn(col);
+		oCol.addCard(myCard);	// loop with decreasing index so that the order is good here
+		//myCard.setColumn(oCol);
 	}
 }
 
@@ -696,18 +793,151 @@ Stack.prototype.flash = function() {
 // Flash all cards
 //-----------------------------------------------------------------------------
 Stack.prototype.flashAll = function() {
-		var i;
-		for (i = 0; i < this.cards.length; i++) {
-			this.cards[i].flash();
-		}
+	var i;
+	for (i = 0; i < this.cards.length; i++) {
+		this.cards[i].flash();
+	}
+}
+
+//=============================================================================
+// dragDrop Object
+//	used to manage drag'n drop
+//	properties
+//	oCol : the "from" column
+//	xOffset : offset between mouse pointer and left of card when dragging
+//	yOffset : offset between mouse pointer and top of card when dragging
+//=============================================================================
+
+//-----------------------------------------------------------------------------
+// Creation of dragDrop, actually called on a "mouseDown" event
+//-----------------------------------------------------------------------------
+function DragDrop(ev) {	// arg : event of the mouseDown
+	var e, target;
+	//find card or Stack to move
+	ev         = ev || window.event;
+	/*
+	We are setting target to whatever item the mouse is currently on
+	Firefox uses event.target here, MSIE uses event.srcElement
+	*/
+	target   = ev.target || ev.srcElement;
+	for (e = target; e != undefined; e = e.parentNode) {
+		if (e.oCard == undefined) continue;
+		var oCard = e.oCard;
+		if (oCard.oCol == undefined) continue;
+		this.oCol = oCard.oCol;
+		break;
+	}
+	// find column if any
+	if (!this.oCol) return;
+	var mousePos = mouseCoords(ev);
+	this.xOffset = this.oCol.elt.offsetLeft - mousePos.x;
+	// find bottom straight
+	this.straight = this.oCol.findBottomStraight();
+	console.log('col=' + this.oCol.elt.id + ', Xmouse=' + mousePos.x + ', Ymouse=' + mousePos.y + ', lgStraight=' + this.straight.cards.length + ', offsetLeft of col=' + this.oCol.elt.offsetLeft + ', offsetTop of fistCard=' + this.straight.cards[this.straight.cards.length - 1].elt.offsetTop);
+	this.yOffset = this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + this.oCol.elt.offsetTop - mousePos.y;
+	// remove from column
+	for (var i = this.straight.cards.length - 1; i >= 0; i--) {
+		var myCard = this.straight.cards[i];
+		this.oCol.cards.pop();
+		if (myCard.elt.parentNode) myCard.elt.parentNode.removeChild(myCard.elt);
+		document.body.appendChild(myCard.elt);
+	}
+	this.moveTo(mousePos);
+}
+
+function mouseCoords(ev){
+	if(ev.pageX || ev.pageY){
+		return {x:ev.pageX, y:ev.pageY};
+	}
+	return {
+		x:ev.clientX + document.body.scrollLeft - document.body.clientLeft,
+		y:ev.clientY + document.body.scrollTop - document.body.clientTop
+		};
+}
+
+// drop the strait
+// 3 cases
+// on same column : this is a "click", move the strait to whatever other possible column
+// on another column and this is possible : move the strait to this column
+// on no column or on a an impossible column, put the strait back to the original column
+DragDrop.prototype.mouseUp = function(ev) {
+/*	 bad method, to be deleted
+	var e, target, newCol;
+	ev         = ev || window.event;
+	//console.log('DradDrop.mouseUp, oCol=' + this.oCol.n);
+	// We are setting target to whatever item the mouse is currently on
+	// Firefox uses event.target here, MSIE uses event.srcElement
+	target   = ev.target || ev.srcElement;
+	for (e = target; e != undefined; e = e.parentNode) {
+		console.log('e=' + e + ', e.id=' + e.id + ', e.class=' + e.class);
+		console.log('e.innerHTML=' + e.innerHTML);
+		if (e.oCard == undefined) continue;
+		var oCard = e.oCard;
+		if (oCard.oCol == undefined) continue;
+		newCol = oCard.oCol;
+		break;
+	}
+*/
+	var oMousePos = mouseCoords(ev);
+	var nCol = Math.floor((oMousePos.x - leftMargin) / columnSpacing);
+	var newCol = cols[nCol];
+	if (this.oCol) console.log('strait from column ' + this.oCol.n + ' dropped on column ' + (newCol ? newCol.n : '<none>'));
+	// no column : put it back
+	if (!newCol) {
+		this.moveBackOrig();
+	} else if (this.oCol == newCol) {
+		this.doClick();
+	} else {
+	}
+	ddrop = undefined;
+}
+
+DragDrop.prototype.moveBackOrig = function() {
+	if (this.straight === undefined) return;
+	for (var i = this.straight.cards.length - 1; i >= 0; i--) {
+		var myCard = this.straight.cards[i];
+		console.log('send back ' + myCard.cardToString() + ' to ' + this.oCol.elt.id);
+		this.oCol.addCard(myCard);
+	}
+
+}
+
+DragDrop.prototype.doClick = function() {
+	this.moveBackOrig();
+	this.oCol.click();
+}
+
+DragDrop.prototype.mouseMove = function(ev) {
+	var mousePos = mouseCoords(ev);
+	this.moveTo(mousePos);
+}
+
+DragDrop.prototype.moveTo = function(pos) {
+	if (this.straight == undefined) return;
+	for (var i = 0; i < this.straight.cards.length; i++) {
+		var myCard = this.straight.cards[i];
+		//console.log('DragDrop.prototype.moveTo, i=' + i + ', card=' + myCard.cardToString() + ', pos.y=' + pos.y + ', this.yOffset=' + this.yOffset);
+		myCard.elt.style.top = (pos.y + 40 * (this.straight.cards.length - (i+1)) + this.yOffset) + 'px';
+		myCard.elt.style.left = (pos.x + this.xOffset) + 'px';
+		myCard.elt.style.zIndex = 9999-i;
+	}
 }
 
 //=============================================================================
 // End of objects
 //=============================================================================
 
+//-----------------------------------------------------------------------------
+// global variables
+//-----------------------------------------------------------------------------
 var deck;	// cards remaining to be dealed
-var cols;	// 8 columns
+var cols;	// 10 columns
+var ddrop;	// dragDrop object, undefined when there is no active drag'n drop
+//-----------------------------------------------------------------------------
+// global constants
+//-----------------------------------------------------------------------------
+var leftMargin = 10;		// from left of backgrounf to left of first column
+var columnSpacing = 102;	// from left of a column to left of next column
 
 //-----------------------------------------------------------------------------
 // initialization (body.onload)
@@ -716,22 +946,18 @@ function initA() {
 	var iCol, n, iCard, oCard, iCol;
 	// build deck
 	deck = new Stack();
-	deck.makeDeck(2);
-	deck.shuffle(1);
-	// create columns, fill them with initial deal
+	// create columns
 	cols = new Array;
 	for (iCol = 0; iCol < 10; iCol++) {
-		// create
 		cols[iCol] = new Stack(iCol);
 		cols[iCol].mkColumn(iCol);
-		// fill with 5 or 6 cards
-		n = ((iCol % 3)==0) ? 6 : 5;
-		for (iCard = 0; iCard < n; iCard++) {
-			oCard = deck.deal();	// get next dealed card
-			cols[iCol].addCard(oCard);
-		}
-		cols[iCol].cards[n-1].unhide();
 	}
+	// prepare drag'n drop
+	document.onmousemove = mouseMove;
+	document.onmousedown = mouseDown;
+	document.onmouseup   = mouseUp;
+	// initialize new game
+	newGame();
 }
 
 //-----------------------------------------------------------------------------
@@ -744,7 +970,14 @@ function dealRow() {
 		cols[iCol].addCard(oCard);
 		oCard.unhide();
 	}
-	alert(truc);
+	showDealt();
+}
+
+//-----------------------------------------------------------------------------
+// display the count of already dealt
+//-----------------------------------------------------------------------------
+function showDealt() {
+	document.getElementById('dealt').innerHTML = (5 - (deck.cardCount()/10)) + '/5';
 }
 
 //-----------------------------------------------------------------------------
@@ -764,7 +997,25 @@ function newGame() {
 		}
 		cols[iCol].cards[n-1].unhide();
 	}
+	showDealt();
 }
+
+//-----------------------------------------------------------------------------
+// mouse event handlers
+//-----------------------------------------------------------------------------
+function mouseUp(ev){
+	if (ddrop) ddrop.mouseUp(ev);
+	ddrop = undefined;
+}
+
+function mouseMove(ev){
+	if (ddrop) ddrop.mouseMove(ev);
+}
+
+function mouseDown(ev){
+	if(!ddrop) ddrop = new DragDrop(ev);
+}
+
 
 	</script>
 </head>
@@ -772,6 +1023,7 @@ function newGame() {
 <div id="bkground">
 <div id="deal" class="but" onclick="javascript:dealRow()">Deal row</div>
 <div id="new"  class="but" onclick="javascript:newGame()">New game</div>
+<div id="dealt"  class="topinfo"></div>
 <div id="col0" class="column"></div>
 <div id="col1" class="column"></div>
 <div id="col2" class="column"></div>
