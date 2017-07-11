@@ -317,6 +317,13 @@ Card.prototype.setColumn = function(oCol, iPos) {
 }
 
 //-----------------------------------------------------------------------------
+// remove from the desk
+//-----------------------------------------------------------------------------
+Card.prototype.remove = function() {
+	if (this.elt.parentNode) this.elt.parentNode.removeChild(this.elt);
+}
+
+//-----------------------------------------------------------------------------
 // flash a card (indicate move impossible)
 //-----------------------------------------------------------------------------
 Card.prototype.flash = function() {
@@ -632,7 +639,7 @@ Stack.prototype.makeDeck = function(n) {
 	for (i = 0; i < n; i++)
 	for (j = 0; j < suits.length; j++)
 		for (k = 1; k <= 13; k++)
-		this.cards[i * m + j * 13 + (k-1)] = new Card(k, suits[j]);
+			this.cards[i * m + j * 13 + (13-k)] = new Card(k, suits[j]);
 }
 
 //-----------------------------------------------------------------------------
@@ -776,6 +783,7 @@ Stack.prototype.click = function() {
 	// find a suitable other location and do the move
 	higherCard = s.cards[s.cards.length - 1];
 	for (myMode = 0; myMode < 3; myMode++) { // first try : same suit, then any suit, then empty columns
+		if (myMode == 2 && s.cards.length == 13 && this.cards.length == 13) continue;	// don't move a full suit alone from one column to another
 		for (iCol = 0; iCol < 10; iCol++) {
 			col = cols[iCol];
 			if (!col.isSuitable(higherCard, myMode)) continue;
@@ -787,14 +795,15 @@ Stack.prototype.click = function() {
 	}
 	if (s.cards.length == 13) {	// whole suit done
 		var suit = s.cards[0].suit;
-		for (var i = 0; i < finishedSuits; i++) {
-			if (finishedSuits[i].id.substring(5, 1) != suit) continue;
+		for (var i = 0; i < finishedSuits.length; i++) {
+			window.console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
+			if (finishedSuits[i].id.substr(4, 1) != suit) continue;
 			if (finishedSuits[i].style.color != 'transparent') continue;
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
-			this.moveStraight(s);	// remove
+			this.moveStraight(s);	// remove from the desk
 			this.unhideLast();
 			// check if win
-			for (var i = 0; i < finishedSuits; i++) {
+			for (var i = 0; i < finishedSuits.length; i++) {
 				if (finishedSuits[i].style.color == 'transparent') return;
 			}
 			win();
@@ -805,13 +814,16 @@ Stack.prototype.click = function() {
 }
 
 //-----------------------------------------------------------------------------
-// Move a straight (oStraight) from this column into an other (oCol)
+// Move a straight (oStraight) from this column into an other (oCol) or remove (oCol undefined)
 //-----------------------------------------------------------------------------
 Stack.prototype.moveStraight = function(oStraight, oCol) {
 	for (var i = oStraight.cards.length - 1; i >= 0; i--) {
 		var myCard = oStraight.cards[i];
 		this.cards.pop();
-		if (oCol !== undefined) oCol.addCard(myCard);	// loop with decreasing index so that the order is good here
+		if (oCol === undefined)
+			myCard.remove();
+		else
+			oCol.addCard(myCard);	// loop with decreasing index so that the order is good here
 	}
 }
 
@@ -912,6 +924,7 @@ function DragDrop(ev) {	// arg : event of the mouseDown
 			this.straight = this.oCol.findBottomStraight();
 			break;
 	}
+	if (this.straight == undefined) return;	// happens when a whole straight is removed
 	console.log('new DragDrop, col=' + this.oCol.elt.id + ', Xmouse=' + mousePos.x + ', Ymouse=' + mousePos.y + ', lgStraight=' + this.straight.cards.length + ', offsetLeft of col=' + this.oCol.elt.offsetLeft + ', offsetTop of fistCard=' + this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + ', button=' + ev.button + ', oCard=' + oCard.cardToString());
 	this.yOffset = this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + this.oCol.elt.offsetTop - mousePos.y;
 	// remove from column
@@ -989,7 +1002,7 @@ DragDrop.prototype.doClick = function() {
 
 DragDrop.prototype.mouseMove = function(ev) {
 	var mousePos = mouseCoords(ev);
-	window.console.log('DragDrop.MouveMove');
+	//window.console.log('DragDrop.MouveMove');
 	this.moveTo(mousePos);
 }
 
@@ -1025,9 +1038,31 @@ var spacingSuits = 50;		// from left of a suit to left of the following suit
 
 //-----------------------------------------------------------------------------
 // Win ! (feel free to be creative, here ;)
+// Arg
+//	absent : standard (all cards removed from the desk)
+//	present : all suits whole and present on the desk
+//				the number is the number of stacked suits (1 to 7)
 //-----------------------------------------------------------------------------
-function win() {
-	document.getElementById("win").style.display = "block";
+function win(level) {
+	var e = document.getElementById("win");
+	e.style.display = "block";
+	switch (level) {
+		case undefined:
+			e.firstChild.textContent  = "You win!";
+			break;
+		case 0:
+			e.firstChild.textContent  = "You did it in the elegant way!";
+			break;
+		case 1:
+			e.firstChild.textContent  = "One stack: that is a freat achievment!";
+			break;
+		case 2:
+			e.firstChild.textContent  = "Two stacks: rarely seen!";
+			break;
+		default:
+			e.firstChild.textContent  = level + " stacks: never seen, consider registering to the Guiness book!";
+			break;
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1085,20 +1120,88 @@ function showDealt() {
 //-----------------------------------------------------------------------------
 // new game
 //-----------------------------------------------------------------------------
-function newGame() {
-	deck.makeDeck(2);
+function normalGame() {
 	deck.shuffle(1);
-	for (iCol = 0; iCol < 10; iCol++) {
+	for (var iCol = 0; iCol < 10; iCol++) {
 		// empty
 		cols[iCol].clear();
 		// fill with 5 or 6 cards
-		n = ((iCol % 3)==0) ? 6 : 5;
-		for (iCard = 0; iCard < n; iCard++) {
-			oCard = deck.deal();	// get next dealed card
+		var n = ((iCol % 3)==0) ? 6 : 5;
+		for (var iCard = 0; iCard < n; iCard++) {
+			var oCard = deck.deal();	// get next dealed card
 			cols[iCol].addCard(oCard);
 		}
 		cols[iCol].cards[n-1].unhide();
 	}
+}
+
+//-----------------------------------------------------------------------------
+// configuration to test end of game (win)
+//-----------------------------------------------------------------------------
+function testConfig1() {
+	// fill 8 cols
+	for (var iCol = 0; iCol < 8; iCol++) {
+		// fill with 13 cards
+		for (var iCard = 0; iCard < 13; iCard++) {
+			var oCard = deck.deal();	// get next dealed card
+			 cols[iCol].addCard(oCard);
+			oCard.unhide();
+		}
+	}
+	// move one card out of its suit
+	var myCard = cols[0].cards[12];
+	cols[0].cards.pop();
+	cols[8].addCard(myCard);
+}
+
+//-----------------------------------------------------------------------------
+// configuration to test full suit above other cards
+//-----------------------------------------------------------------------------
+function testConfig2() {
+	// fill 5 cols
+	for (var iCol = 0; iCol < 5; iCol++) {
+		// fill with 13 cards
+		for (var iCard = 0; iCard < 13; iCard++) {
+			var oCard = deck.deal();	// get next dealed card
+			cols[iCol].addCard(oCard);
+			oCard.unhide();
+		}
+	}
+	// move three cards out of their suit
+	for (var i = 0; i < 3; i++) {
+		var myCard = cols[0].cards[12-i];
+		cols[0].cards.pop();
+		cols[7+i].addCard(myCard);
+		}
+	// stack next 2 suits
+	for (var iCol = 1; iCol <=2; iCol++) {
+		// fill with 13 cards
+		for (var iCard = 0; iCard < 13; iCard++) {
+			var oCard = deck.deal();	// get next dealed card
+			cols[iCol].addCard(oCard);
+			oCard.unhide();
+		}
+	}
+	// fill last suit on top of one alone card
+	for (var iCard = 0; iCard < 13; iCard++) {
+		var oCard = deck.deal();	// get next dealed card
+		cols[8].addCard(oCard);
+		oCard.unhide();
+	}
+}
+
+//-----------------------------------------------------------------------------
+// new game
+//-----------------------------------------------------------------------------
+function newGame() {
+	deck.makeDeck(2);
+	// empty deck
+	for (var iCol = 0; iCol < 10; iCol++) cols[iCol].clear();
+
+	//normalGame();
+	//testConfig1();
+	testConfig2();
+
 	showDealt();
 	for (var i = 0; i < finishedSuits.length; i++) finishedSuits[i].style.color = 'transparent';
 	document.getElementById("win").style.display = 'none';
@@ -1148,7 +1251,7 @@ function mouseDown(ev){
 <div id="suitH2", class="terminatedSuit red">♥</div>
 <div id="suitS1", class="terminatedSuit">♠</div>
 <div id="suitS2", class="terminatedSuit">♠</div>
-<div id="win">You win!</div>
+<div id="win" >x</div>
 </div>
 </body>
 </html>
