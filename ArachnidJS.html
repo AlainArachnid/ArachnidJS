@@ -69,8 +69,14 @@ html, body {
 	position: absolute;
 	border: solid blue 2px;
 	display: none;
+	left: 0;
+	right: 0;
+	 margin-left: auto; 
+	margin-right: auto; 
 	top: 120px;
-	left: 300px;
+	xleft: 300px;
+	width: 50%;
+	xmargin: 0 auto;
 	font-size: 100px;
 	z-index: 99999;
 	background-color: purple;
@@ -790,6 +796,8 @@ Stack.prototype.click = function() {
 			// got a suitable destination, do the move
 			this.moveStraight(s, col);
 			this.unhideLast();
+			// check if win (greater mode, all suit complete and on the desk)
+			if (checkWinGreat()) return;
 			return;
 		}
 	}
@@ -802,7 +810,9 @@ Stack.prototype.click = function() {
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
 			this.moveStraight(s);	// remove from the desk
 			this.unhideLast();
-			// check if win
+			// check if win (greater mode, all suit complete and on the desk)
+			if (checkWinGreat()) return;
+			// check if win (lesser mode)
 			for (var i = 0; i < finishedSuits.length; i++) {
 				if (finishedSuits[i].style.color == 'transparent') return;
 			}
@@ -833,7 +843,7 @@ Stack.prototype.moveStraight = function(oStraight, oCol) {
 Stack.prototype.dropStraight = function(oStraight) {
 	for (var i = oStraight.cards.length - 1; i >= 0; i--) {
 		var myCard = oStraight.cards[i];
-		console.log('drop ' + myCard.cardToString() + ' to ' + this.elt.id);
+		//console.log('drop ' + myCard.cardToString() + ' to ' + this.elt.id);
 		this.addCard(myCard);
 	}
 }
@@ -986,13 +996,6 @@ DragDrop.prototype.mouseUp = function(ev) {
 DragDrop.prototype.moveBackOrig = function() {
 	if (this.straight === undefined) return;
 	this.oCol.dropStraight(this.straight);
-/* to be deleted
-	for (var i = this.straight.cards.length - 1; i >= 0; i--) {
-		var myCard = this.straight.cards[i];
-		console.log('send back ' + myCard.cardToString() + ' to ' + this.oCol.elt.id);
-		this.oCol.addCard(myCard);
-	}
-*/
 }
 
 DragDrop.prototype.doClick = function() {
@@ -1024,7 +1027,7 @@ DragDrop.prototype.moveTo = function(pos) {
 //-----------------------------------------------------------------------------
 // global variables
 //-----------------------------------------------------------------------------
-var deck;	// cards remaining to be dealed
+var deck;	// cards remaining to be dealt
 var cols;	// 10 columns
 var ddrop;	// dragDrop object, undefined when there is no active drag'n drop
 var finishedSuits = [];	// DIVs where to show finished suits
@@ -1035,6 +1038,41 @@ var leftMargin = 10;		// from left of background to left of first column
 var columnSpacing = 102;	// from left of a column to left of next column
 var rightSuits = 100;		// from left of background to left of left completed suit
 var spacingSuits = 50;		// from left of a suit to left of the following suit
+
+//-----------------------------------------------------------------------------
+// Check if the 8 suits are whole and on the desk. Show Win message if yes (and return true)
+//-----------------------------------------------------------------------------
+function checkWinGreat() {
+	var stackedWholeSuit = 0;
+	var nWholeSuit = 0;
+	for (var iCol = 0; iCol < 10; iCol++) {
+		var oCol = cols[iCol];
+		// If column is empty, skip
+		if (oCol.cards[0] == undefined) continue;
+		// if first card is hidden => not (yet) won
+		console.log('checkWinGreat, iCol=' + iCol + ', fisrt card visible=' + oCol.cards[0].visible + ', length=' + oCol.cards.length);
+		if (oCol.cards[0].visible !== true) return;
+		// check for whole suits
+		for (var iSuit = 0; ; iSuit++) {
+			if (((iSuit + 1) * 13) > oCol.cards.length) return;
+			var suit = oCol.cards[iSuit * 13].suit;
+			for (var iRank = 1; iRank <= 13; iRank++) {
+				var oCard = oCol.cards[iSuit * 13 + iRank - 1];
+				console.log('checkWinGreat, iSuit=' + iSuit + ', iRank=' + iRank + ', card=' + oCard.cardToString());
+				if (oCard.suit != suit) return;	// not same suit than the first of the 13 cards straight
+				if (oCard.rank != (14-iRank)) return;	// not the good rank
+			}
+			nWholeSuit++;
+			if (iSuit > 0) stackedWholeSuit++;
+			if (((iSuit + 1) * 13) == oCol.cards.length) break; // done with this column. It is OK
+		}
+	}
+	if (nWholeSuit < 8)
+		win();
+	else
+		win(stackedWholeSuit);
+	return true;
+}
 
 //-----------------------------------------------------------------------------
 // Win ! (feel free to be creative, here ;)
@@ -1054,7 +1092,7 @@ function win(level) {
 			e.firstChild.textContent  = "You did it in the elegant way!";
 			break;
 		case 1:
-			e.firstChild.textContent  = "One stack: that is a freat achievment!";
+			e.firstChild.textContent  = "One stack: this is a great achievment!";
 			break;
 		case 2:
 			e.firstChild.textContent  = "Two stacks: rarely seen!";
