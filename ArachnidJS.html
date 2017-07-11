@@ -15,8 +15,7 @@
 
 /******************************************************************************
 * TODO
-* Drag'n drop (and split straights)
-* remove whole suits
+* remove whole suits (bug : do not remove if there is an emty column) & detect when winning (also when a suits are whone on the desk)
 * undo
 * 
 ******************************************************************************/
@@ -64,6 +63,18 @@ html, body {
 #dealt {
 	top: 10px;
 	left: 100px;
+}
+
+#win {
+	position: absolute;
+	border: solid blue 2px;
+	display: none;
+	top: 120px;
+	left: 300px;
+	font-size: 100px;
+	z-index: 99999;
+	background-color: purple;
+	color: white;
 }
 
 .column {
@@ -123,6 +134,16 @@ html, body {
 }
 
 .red { color: #ff0000; }
+
+.terminatedSuit {
+	position: absolute;
+	color: transparent;
+	font-size: 20pt;
+	top: 15px;
+	border: solid white 1px;
+	width: 20px;
+	text-align: center;
+}
 
 .index {
 	font-size: 50%;
@@ -764,6 +785,22 @@ Stack.prototype.click = function() {
 			return;
 		}
 	}
+	if (s.cards.length == 13) {	// whole suit done
+		var suit = s.cards[0].suit;
+		for (var i = 0; i < finishedSuits; i++) {
+			if (finishedSuits[i].id.substring(5, 1) != suit) continue;
+			if (finishedSuits[i].style.color != 'transparent') continue;
+			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
+			this.moveStraight(s);	// remove
+			this.unhideLast();
+			// check if win
+			for (var i = 0; i < finishedSuits; i++) {
+				if (finishedSuits[i].style.color == 'transparent') return;
+			}
+			win();
+			return;
+		}
+	}
 	s.flashAll();	// tell player there was no suitable destination
 }
 
@@ -774,8 +811,7 @@ Stack.prototype.moveStraight = function(oStraight, oCol) {
 	for (var i = oStraight.cards.length - 1; i >= 0; i--) {
 		var myCard = oStraight.cards[i];
 		this.cards.pop();
-		oCol.addCard(myCard);	// loop with decreasing index so that the order is good here
-		//myCard.setColumn(oCol);
+		if (oCol !== undefined) oCol.addCard(myCard);	// loop with decreasing index so that the order is good here
 	}
 }
 
@@ -978,17 +1014,27 @@ DragDrop.prototype.moveTo = function(pos) {
 var deck;	// cards remaining to be dealed
 var cols;	// 10 columns
 var ddrop;	// dragDrop object, undefined when there is no active drag'n drop
+var finishedSuits = [];	// DIVs where to show finished suits
 //-----------------------------------------------------------------------------
 // global constants
 //-----------------------------------------------------------------------------
 var leftMargin = 10;		// from left of background to left of first column
 var columnSpacing = 102;	// from left of a column to left of next column
+var rightSuits = 100;		// from left of background to left of left completed suit
+var spacingSuits = 50;		// from left of a suit to left of the following suit
+
+//-----------------------------------------------------------------------------
+// Win ! (feel free to be creative, here ;)
+//-----------------------------------------------------------------------------
+function win() {
+	document.getElementById("win").style.display = "block";
+}
 
 //-----------------------------------------------------------------------------
 // initialization (body.onload)
 //-----------------------------------------------------------------------------
 function initA() {
-	var iCol, n, iCard, oCard, iCol;
+	var iCol, n, iCard, oCard, iCol, j, k;
 	// build deck
 	deck = new Stack();
 	// create columns
@@ -996,6 +1042,15 @@ function initA() {
 	for (iCol = 0; iCol < 10; iCol++) {
 		cols[iCol] = new Stack(iCol);
 		cols[iCol].mkColumn(iCol);
+	}
+	// prepare where the completed suits go
+	var suits = new Array("C", "D", "H", "S");
+	for (j = 0; j < suits.length; j++) {
+		for (k = 1; k <= 2; k++) {
+			var e = document.getElementById('suit' + suits[j] + k);
+			e.style.right = (rightSuits + (j*2 + k) * spacingSuits) + 'px';
+			finishedSuits.push(e);
+		}
 	}
 	// prepare drag'n drop
 	document.onmousemove = mouseMove;
@@ -1045,6 +1100,8 @@ function newGame() {
 		cols[iCol].cards[n-1].unhide();
 	}
 	showDealt();
+	for (var i = 0; i < finishedSuits.length; i++) finishedSuits[i].style.color = 'transparent';
+	document.getElementById("win").style.display = 'none';
 }
 
 //-----------------------------------------------------------------------------
@@ -1083,6 +1140,15 @@ function mouseDown(ev){
 <div id="col7" class="column"></div>
 <div id="col8" class="column"></div>
 <div id="col9" class="column"></div>
+<div id="suitC1", class="terminatedSuit">♣</div>
+<div id="suitC2", class="terminatedSuit">♣</div>
+<div id="suitD1", class="terminatedSuit red">♦</div>
+<div id="suitD2", class="terminatedSuit red">♦</div>
+<div id="suitH1", class="terminatedSuit red">♥</div>
+<div id="suitH2", class="terminatedSuit red">♥</div>
+<div id="suitS1", class="terminatedSuit">♠</div>
+<div id="suitS2", class="terminatedSuit">♠</div>
+<div id="win">You win!</div>
 </div>
 </body>
 </html>
