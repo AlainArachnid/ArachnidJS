@@ -55,11 +55,13 @@ html, body {
 #deal {
 	top: 10px;
 	left: 10px;
+	border-radius: 10px;
 }
 
 #new {
 	top: 10px;
 	right: 20px;
+	border-radius: 10px;
 }
 
 #dealt {
@@ -88,7 +90,7 @@ html, body {
 .column {
 	position: absolute;
 	width: 100px;
-	top: 100px;
+	top: 50px;
 	bottom: 0;
 }
 
@@ -102,6 +104,7 @@ html, body {
 	position: absolute;
 	width:  100px;
 	height: 133px;
+	border-radius: 5px;
 }
 
 .cardHidden div, .cardHidden img {
@@ -131,6 +134,7 @@ html, body {
 	position: absolute;
 	width:  100px;
 	height: 133px;
+	border-radius: 5px;
 }
 
 .front {
@@ -139,6 +143,7 @@ html, body {
 	position: absolute;
 	width: 100%;
 	height: 100%;
+	border-radius: 5px;
 }
 
 .red { color: #ff0000; }
@@ -147,19 +152,27 @@ html, body {
 	position: absolute;
 	color: transparent;
 	font-size: 20pt;
-	top: 15px;
+	top: 11px;
 	border: solid white 1px;
 	width: 20px;
 	text-align: center;
+	border-radius: 3px;
 }
 
-.index {
+.index, .index2 {
 	font-size: 50%;
 	font-weight: bold;
 	text-align: center;
 	position: absolute;
-	left: 0.25em;
 	top:  0.25em;
+}
+
+.index {
+	left: 0.25em;
+}
+
+.index2 {
+	right: 0.25em;
 }
 
 .ace {
@@ -220,6 +233,7 @@ html, body {
 //	Properties
 //		rank: 1 (ace) to 13 (king)
 //		suit: "Clubs" or "Diamonds" or "Hearts" or "Spades"
+//		spacing: distance between top of one card and top of the underlying card
 //	Methods
 //		setColumn(oCol, iPos): link to column oCol at position iPos
 //		flash(): flash the card (indicate move impossible)
@@ -228,7 +242,7 @@ html, body {
 //		createNode(): Returns a DIV node which can be used to display the card on a page.
 //
 /////////////////////////////////
-//	Stack (used for desk (that is: cards that are not in columns), for columns and for straights)
+//	Stack : used for desk (that is: cards that are not in columns), for columns and for straights
 /////////////////////////////////
 //	Constructor
 //		Stack()
@@ -255,8 +269,9 @@ html, body {
 //				mode=1 any suit
 //				mode=2 empty columns
 //				mode=99 any mode
+//		respace() : Re compute vertical spacing if needed
 //	(specific to straight)
-//		moveStraight(oStraight, oCol): Move a straight (oStraight) from this column into an other (oCol)
+//		moveStraight(oStraight, oCol): Move a straight (oStraight) from this column into an other (oCol). Remove only if oCol is absent
 //		flashAll(): Flash all cards
 
 //
@@ -302,6 +317,7 @@ html, body {
 function Card(rank, suit) {
 	this.rank = rank;
 	this.suit = suit;
+	this.spacing = 40;
 }
 
 //-----------------------------------------------------------------------------
@@ -319,7 +335,7 @@ Card.prototype.setColumn = function(oCol, iPos) {
 	}
 	if (this.elt.parentNode) this.elt.parentNode.removeChild(this.elt);
 	oCol.elt.appendChild(this.elt);
-	this.elt.style.top = (iPos * 40) + 'px';
+	this.elt.style.top = (iPos * this.spacing) + 'px';
 	this.elt.style.left = 0;
 	this.elt.style.zIndex = iPos;
 }
@@ -447,7 +463,7 @@ Card.prototype.createNode = function() {
 
 	frontNode = document.createElement("DIV");
 	frontNode.className = "front";
-	frontNode.oncontextmenu = returnFalse;
+	frontNode.oncontextmenu = returnFalse;	// disable context menu because we use left button to do splitted drag'n drop
 
 	// Get proper character for card suit and change font color if necessary.
 
@@ -483,12 +499,20 @@ Card.prototype.createNode = function() {
 	spotNode.className = "index";
 	textNode = document.createTextNode(indexStr);
 	spotNode.appendChild(textNode);
-	spotNode.appendChild(document.createElement("BR"));
+	// moved to upper right, to be deleted
+	//spotNode.appendChild(document.createElement("BR"));
+	//textNode = document.createTextNode(spotChar);
+	//spotNode.appendChild(textNode);
+	frontNode.appendChild(spotNode);
+
+	// small indicator of suit upper right, so that it is still visible when columns are compressed
+	spotNode = document.createElement("DIV");
+	spotNode.className = "index2";
 	textNode = document.createTextNode(spotChar);
 	spotNode.appendChild(textNode);
 	frontNode.appendChild(spotNode);
 
-	// Create and add spots based on card rank (Ace thru 10).
+	// Create and add spots based on card rank (Ace through 10).
 
 	spotNode = document.createElement("DIV");
 	textNode = document.createTextNode(spotChar);
@@ -713,10 +737,12 @@ Stack.prototype.addCard = function(oCard) {
 // The given stack (oOther) is emptied.
 //-----------------------------------------------------------------------------
 
+/* not used, should add respace column
 Stack.prototype.combine = function(oOther) {
 	this.cards = this.cards.concat(oOther.cards);
 	oOther.cards = new Array();
 }
+*/
 
 //-----------------------------------------------------------------------------
 // stackCardCount(): Returns the number of cards currently in the stack.
@@ -806,7 +832,7 @@ Stack.prototype.click = function() {
 	if (s.cards.length == 13) {	// whole suit done
 		var suit = s.cards[0].suit;
 		for (var i = 0; i < finishedSuits.length; i++) {
-			window.console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
+			//window.console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
 			if (finishedSuits[i].id.substr(4, 1) != suit) continue;
 			if (finishedSuits[i].style.color != 'transparent') continue;
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
@@ -837,6 +863,8 @@ Stack.prototype.moveStraight = function(oStraight, oCol) {
 		else
 			oCol.addCard(myCard);	// loop with decreasing index so that the order is good here
 	}
+	if (oCol !== undefined) oCol.respace();
+	this.respace();
 }
 
 //-----------------------------------------------------------------------------
@@ -848,6 +876,7 @@ Stack.prototype.dropStraight = function(oStraight) {
 		//console.log('drop ' + myCard.cardToString() + ' to ' + this.elt.id);
 		this.addCard(myCard);
 	}
+	this.respace();
 }
 
 //-----------------------------------------------------------------------------
@@ -888,6 +917,35 @@ Stack.prototype.flashAll = function() {
 	var i;
 	for (i = 0; i < this.cards.length; i++) {
 		this.cards[i].flash();
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Recompute vertical spacing if needed
+//-----------------------------------------------------------------------------
+Stack.prototype.respace = function() {
+	var nbCard = this.cards.length;
+	//console.log('respace, nbCard=' + nbCard);
+	if (nbCard <= 1) return;	// nothing to do if 0 or 1 card (no spacing)
+	var elt = this.cards[nbCard-1].elt;
+	if (elt == undefined) return;
+	var parent = elt.parentNode;
+	if (parent == undefined) return;
+	//console.log('respace, elt=' + elt.innerText.replace(/\n/g, " "));
+	var h = window.innerHeight	// height of the viewport
+		|| document.documentElement.clientHeight
+		|| document.body.clientHeight;
+	var rect = parent.getBoundingClientRect();	// rectangle of the column
+	var newSpacing = 
+		(h - rect.top	// space between top of columns and bottom of viewport
+		- 30)	// 30 px margin
+		/ (nbCard-1);	// divided by number of spacing
+	//console.log('respace, h=' + h + ', rect.top=' + rect.top + ', newSpacing=' + newSpacing);
+	if (newSpacing > 40) newSpacing = 40;
+	if (newSpacing != this.spacing) {
+		this.spacing = newSpacing;
+		// redraw cards
+		for (var iPos = 1; iPos < nbCard; iPos++) this.cards[iPos].elt.style.top = (iPos * newSpacing) + 'px';
 	}
 }
 
@@ -937,7 +995,7 @@ function DragDrop(ev) {	// arg : event of the mouseDown
 			break;
 	}
 	if (this.straight == undefined) return;	// happens when a whole straight is removed
-	console.log('new DragDrop, col=' + this.oCol.elt.id + ', Xmouse=' + mousePos.x + ', Ymouse=' + mousePos.y + ', lgStraight=' + this.straight.cards.length + ', offsetLeft of col=' + this.oCol.elt.offsetLeft + ', offsetTop of fistCard=' + this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + ', button=' + ev.button + ', oCard=' + oCard.cardToString());
+	//console.log('new DragDrop, col=' + this.oCol.elt.id + ', Xmouse=' + mousePos.x + ', Ymouse=' + mousePos.y + ', lgStraight=' + this.straight.cards.length + ', offsetLeft of col=' + this.oCol.elt.offsetLeft + ', offsetTop of fistCard=' + this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + ', button=' + ev.button + ', oCard=' + oCard.cardToString());
 	this.yOffset = this.straight.cards[this.straight.cards.length - 1].elt.offsetTop + this.oCol.elt.offsetTop - mousePos.y;
 	// remove from column
 	for (var i = this.straight.cards.length - 1; i >= 0; i--) {
@@ -968,16 +1026,16 @@ DragDrop.prototype.mouseUp = function(ev) {
 	var oMousePos = mouseCoords(ev);
 	var nCol = Math.floor((oMousePos.x - leftMargin) / columnSpacing);
 	var newCol = cols[nCol];
-	if (this.oCol) console.log('strait from column ' + this.oCol.n + ' dropped on column ' + (newCol ? newCol.n : '<none>'));
+	//if (this.oCol) console.log('strait from column ' + this.oCol.n + ' dropped on column ' + (newCol ? newCol.n : '<none>'));
 	// no column : put it back
 	if (!newCol) {
-		window.console.log('DragDrop.mouseUp, no newCol, back');
+		//window.console.log('DragDrop.mouseUp, no newCol, back');
 		this.moveBackOrig();
 	} else if (this.oCol == newCol) {
-		var tdNow;
+		var tsNow;
 		if (ev.timeStamp) tsNow = ev.timeStamp;
 		else tsNow = +new Date();
-		window.console.log('DragDrop.mouseUp, same column, time(ms)=' + (tsNow - this.tsStart) + ', ev.timeStamp=' + ev.timeStamp + ', new Date=' + (+new Date()) + ', this.tsStart=' + this.tsStart + ', tsNow=' + tsNow);
+		//window.console.log('DragDrop.mouseUp, same column, time(ms)=' + (tsNow - this.tsStart) + ', ev.timeStamp=' + ev.timeStamp + ', new Date=' + (+new Date()) + ', this.tsStart=' + this.tsStart + ', tsNow=' + tsNow);
 		if (tsNow < this.tsStart + 300) this.doClick();	// JS timestamp are in millisecond. Test here if less than 0,3 s
 		else this.moveBackOrig();
 	} else if (this.straight !== undefined) {
@@ -985,9 +1043,9 @@ DragDrop.prototype.mouseUp = function(ev) {
 		if (newCol.isSuitable(higherCard, 99)) {
 			newCol.dropStraight(this.straight);
 			this.oCol.unhideLast();
-			window.console.log('DragDrop.mouseUp, drop here');
+			//window.console.log('DragDrop.mouseUp, drop here');
 		} else {
-			window.console.log('DragDrop.mouseUp, not suitable');
+			//window.console.log('DragDrop.mouseUp, not suitable');
 			this.moveBackOrig();
 		}
 	}
@@ -1013,10 +1071,12 @@ DragDrop.prototype.mouseMove = function(ev) {
 
 DragDrop.prototype.moveTo = function(pos) {
 	if (this.straight == undefined) return;
+	var scrollOffset = document.getElementById('bkground').scrollTop;
+	if (scrollOffset == undefined) scrollOffset = 0;
 	for (var i = 0; i < this.straight.cards.length; i++) {
 		var myCard = this.straight.cards[i];
-		//console.log('DragDrop.prototype.moveTo, i=' + i + ', card=' + myCard.cardToString() + ', pos.y=' + pos.y + ', this.yOffset=' + this.yOffset);
-		myCard.elt.style.top = (pos.y + 40 * (this.straight.cards.length - (i+1)) + this.yOffset) + 'px';
+		//console.log('DragDrop.prototype.moveTo, i=' + i + ', card=' + myCard.cardToString() + ', pos.y=' + pos.y + ', this.yOffset=' + this.yOffset + ', scrollOffset=' + scrollOffset);
+		myCard.elt.style.top = (pos.y + 40 * (this.straight.cards.length - (i+1)) + this.yOffset - scrollOffset) + 'px';
 		myCard.elt.style.left = (pos.x + this.xOffset) + 'px';
 		myCard.elt.style.zIndex = 9999-i;
 	}
@@ -1052,7 +1112,7 @@ function checkWinGreat() {
 		// If column is empty, skip
 		if (oCol.cards[0] == undefined) continue;
 		// if first card is hidden => not (yet) won
-		console.log('checkWinGreat, iCol=' + iCol + ', fisrt card visible=' + oCol.cards[0].visible + ', length=' + oCol.cards.length);
+		//console.log('checkWinGreat, iCol=' + iCol + ', fisrt card visible=' + oCol.cards[0].visible + ', length=' + oCol.cards.length);
 		if (oCol.cards[0].visible !== true) return;
 		// check for whole suits
 		for (var iSuit = 0; ; iSuit++) {
@@ -1060,7 +1120,7 @@ function checkWinGreat() {
 			var suit = oCol.cards[iSuit * 13].suit;
 			for (var iRank = 1; iRank <= 13; iRank++) {
 				var oCard = oCol.cards[iSuit * 13 + iRank - 1];
-				console.log('checkWinGreat, iSuit=' + iSuit + ', iRank=' + iRank + ', card=' + oCard.cardToString());
+				//console.log('checkWinGreat, iSuit=' + iSuit + ', iRank=' + iRank + ', card=' + oCard.cardToString());
 				if (oCard.suit != suit) return;	// not same suit than the first of the 13 cards straight
 				if (oCard.rank != (14-iRank)) return;	// not the good rank
 			}
@@ -1131,6 +1191,9 @@ function initA() {
 	document.onmousemove = mouseMove;
 	document.onmousedown = mouseDown;
 	document.onmouseup   = mouseUp;
+	// viewport resize
+	window.onresize = windowResize;
+	window.orientationChange = windowResize;
 	// debug right click
 	//document.body.oncontextmenu = function(ev) {ev = ev || window.event; target = ev.target || ev.srcElement; window.console.log('debugRightClick ev.target' + ev.target.id);};
 	// initialize new game
@@ -1172,6 +1235,7 @@ function normalGame() {
 			cols[iCol].addCard(oCard);
 		}
 		cols[iCol].cards[n-1].unhide();
+		cols[iCol].respace();
 	}
 }
 
@@ -1187,6 +1251,7 @@ function testConfig1() {
 			 cols[iCol].addCard(oCard);
 			oCard.unhide();
 		}
+		cols[iCol].respace();
 	}
 	// move one card out of its suit
 	var myCard = cols[0].cards[12];
@@ -1206,6 +1271,7 @@ function testConfig2() {
 			cols[iCol].addCard(oCard);
 			oCard.unhide();
 		}
+		cols[iCol].respace();
 	}
 	// move three cards out of their suit
 	for (var i = 0; i < 3; i++) {
@@ -1221,6 +1287,7 @@ function testConfig2() {
 			cols[iCol].addCard(oCard);
 			oCard.unhide();
 		}
+		cols[iCol].respace();
 	}
 	// fill last suit on top of one alone card
 	for (var iCard = 0; iCard < 13; iCard++) {
@@ -1228,6 +1295,7 @@ function testConfig2() {
 		cols[8].addCard(oCard);
 		oCard.unhide();
 	}
+	cols[8].respace();
 }
 
 //-----------------------------------------------------------------------------
@@ -1248,12 +1316,21 @@ function newGame() {
 }
 
 //-----------------------------------------------------------------------------
+// Viewport resize event handler
+//-----------------------------------------------------------------------------
+function windowResize(ev){
+	for (var iCol = 0; iCol < 10; iCol++) {
+		cols[iCol].respace();
+	}
+}
+
+//-----------------------------------------------------------------------------
 // mouse event handlers
 //-----------------------------------------------------------------------------
 function mouseUp(ev){
 	if (ddrop) {
 		ddrop.mouseUp(ev);
-		window.console.log('delete ddrop');
+		//window.console.log('delete ddrop');
 	}
 	ddrop = undefined;
 }
