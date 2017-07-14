@@ -18,7 +18,6 @@
 * undo
 * timer
 * move counter
-* compress big columns
 * 
 ******************************************************************************/
 
@@ -39,12 +38,19 @@ html, body {
 	overflow-x: hidden;	/* avoid horizontal scroll */
 }
 
-.but {
+.but, .butFlashed {
 	position: absolute;
 	border: solid blue 2px;
-	background-color: #D0D0D0;
 	cursor: pointer;
 	padding: 5px;
+}
+
+.but {
+	background-color: #D0D0D0;
+}
+
+.butFlashed {
+	background-color: black;
 }
 
 .topinfo {
@@ -1207,8 +1213,18 @@ function dealRow() {
 	var iCol, oCard;
 	for (iCol = 0; iCol < 10; iCol++) {
 		oCard = deck.deal();	// get next dealed card
+		if (oCard == undefined) {	// nothing left to deal
+			// flash deal button
+			var elt = document.getElementById('deal');
+			elt.className = 'butFlashed';
+			window.setTimeout(function() {elt.className = 'but';}, 100);
+			window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
+			window.setTimeout(function() {elt.className = 'but';}, 300);
+			return;
+		}
 		cols[iCol].addCard(oCard);
 		oCard.unhide();
+		cols[iCol].respace();
 	}
 	showDealt();
 }
