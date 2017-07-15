@@ -1,5 +1,5 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html>
 <head>
 	<title>Arachnid</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -16,8 +16,6 @@
 /******************************************************************************
 * TODO
 * undo
-* timer
-* move counter
 * 
 ******************************************************************************/
 
@@ -56,6 +54,7 @@ html, body {
 .topinfo {
 	position: absolute;
 	padding: 5px;
+	color: white;
 }
 
 #deal {
@@ -73,6 +72,16 @@ html, body {
 #dealt {
 	top: 10px;
 	left: 100px;
+}
+
+#elapsed {
+	top: 10px;
+	left: 200px;
+}
+
+#moves {
+	top: 10px;
+	left: 300px;
 }
 
 #win {
@@ -830,6 +839,7 @@ Stack.prototype.click = function() {
 			// got a suitable destination, do the move
 			this.moveStraight(s, col);
 			this.unhideLast();
+			incMove();
 			// check if win (greater mode, all suit complete and on the desk)
 			if (checkWinGreat()) return;
 			return;
@@ -844,6 +854,7 @@ Stack.prototype.click = function() {
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
 			this.moveStraight(s);	// remove from the desk
 			this.unhideLast();
+			incMove();
 			// check if win (greater mode, all suit complete and on the desk)
 			if (checkWinGreat()) return;
 			// check if win (lesser mode)
@@ -1049,6 +1060,7 @@ DragDrop.prototype.mouseUp = function(ev) {
 		if (newCol.isSuitable(higherCard, 99)) {
 			newCol.dropStraight(this.straight);
 			this.oCol.unhideLast();
+			incMove();
 			//window.console.log('DragDrop.mouseUp, drop here');
 		} else {
 			//window.console.log('DragDrop.mouseUp, not suitable');
@@ -1104,8 +1116,11 @@ var finishedSuits = [];	// DIVs where to show finished suits
 //-----------------------------------------------------------------------------
 var leftMargin = 10;		// from left of background to left of first column
 var columnSpacing = 102;	// from left of a column to left of next column
-var rightSuits = 100;		// from left of background to left of left completed suit
-var spacingSuits = 50;		// from left of a suit to left of the following suit
+var rightSuits = 100;		// from right of background to right of right completed suit
+var spacingSuits = 50;		// from right of a suit to right of the following suit
+var timestampStart;			// used to display elapsed time
+var idTimerElapsed;			// used to display elapsed time
+var nbMove;					// used to display number of moves for this game
 
 //-----------------------------------------------------------------------------
 // Check if the 8 suits are whole and on the desk. Show Win message if yes (and return true)
@@ -1315,6 +1330,40 @@ function testConfig2() {
 }
 
 //-----------------------------------------------------------------------------
+// call each time a move is done
+//-----------------------------------------------------------------------------
+function incMove() {
+	nbMove++;
+	showMoves();
+}
+
+//-----------------------------------------------------------------------------
+// display number of moves for this game
+//-----------------------------------------------------------------------------
+function showMoves() {
+	document.getElementById('moves').firstChild.textContent = nbMove + ' move' + (nbMove > 1 ? 's' : '');
+}
+
+//-----------------------------------------------------------------------------
+// display ellapsed time for this game
+// called every second (timer)
+//-----------------------------------------------------------------------------
+function showElapsed() {
+	var tsNow = +new Date();	// "+" convert date object to timestamp
+	var nbSecond = Math.round((tsNow - timestampStart) / 1000);
+	document.getElementById('elapsed').firstChild.textContent = nbSecond + ' s';
+}
+
+//-----------------------------------------------------------------------------
+// kill timer for elapsed time
+//-----------------------------------------------------------------------------
+function killTimerElapsed() {
+	if (idTimerElapsed == undefined) return;
+	clearInterval(idTimerElapsed);
+	idTimerElapsed = undefined;
+}
+
+//-----------------------------------------------------------------------------
 // new game
 //-----------------------------------------------------------------------------
 function newGame() {
@@ -1329,6 +1378,12 @@ function newGame() {
 	showDealt();
 	for (var i = 0; i < finishedSuits.length; i++) finishedSuits[i].style.color = 'transparent';
 	document.getElementById("win").style.display = 'none';
+	killTimerElapsed();
+	timestampStart = +new Date();	// "+" convert date object to timestamp
+	showElapsed();
+	idTimerElapsed = setInterval(showElapsed, 1000);
+	nbMove = 0;
+	showMoves();
 }
 
 //-----------------------------------------------------------------------------
@@ -1365,6 +1420,8 @@ function mouseDown(ev){
 <div id="bkground">
 <div id="deal" class="but" onclick="dealRow()">Deal row</div>
 <div id="new"  class="but" onclick="newGame()">New game</div>
+<div id="elapsed" class="topinfo">0 s</div>
+<div id="moves" class="topinfo">0 move</div>
 <div id="dealt"  class="topinfo"></div>
 <div id="col0" class="column"></div>
 <div id="col1" class="column"></div>
