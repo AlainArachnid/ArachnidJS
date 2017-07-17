@@ -15,7 +15,8 @@
 
 /******************************************************************************
 * TODO
-* undo
+* restore
+* process Touch events
 * 
 ******************************************************************************/
 
@@ -23,6 +24,7 @@ html, body {
 	height:100%;
 	margin:0px;
 	padding:0px;
+	font-family: Sans-Serif;
 }
 
 #bkground {
@@ -34,6 +36,12 @@ html, body {
 	position: absolute;
 	overflow-y: auto;	/* allow background to expand as much as needed for very long columns */
 	overflow-x: hidden;	/* avoid horizontal scroll */
+}
+
+#log {
+	position: absolute;
+	bottom: 0;
+	left: 0;
 }
 
 .but, .butFlashed {
@@ -55,6 +63,7 @@ html, body {
 	position: absolute;
 	padding: 5px;
 	color: white;
+	top: 13px;
 }
 
 #deal {
@@ -69,19 +78,36 @@ html, body {
 	border-radius: 10px;
 }
 
-#dealt {
+#save {
 	top: 10px;
+	left: 340px;
+	border-radius: 10px;
+}
+
+#restore {
+	top: 10px;
+	left: 410px;
+	border-radius: 10px;
+}
+
+#undo {
+	top: 10px;
+	left: 540px;
+	border-radius: 10px;
+}
+
+#dealt {
 	left: 100px;
 }
 
 #elapsed {
-	top: 10px;
-	left: 200px;
+	left: 140px;
 }
 
 #moves {
-	top: 10px;
-	left: 300px;
+	left: 220px;
+	width: 90px;
+	text-align: right;
 }
 
 #win {
@@ -255,6 +281,7 @@ html, body {
 //		unhide()
 //		cardToString(): Returns the name of a card (including rank and suit) as a text string
 //		createNode(): Returns a DIV node which can be used to display the card on a page.
+//		match(other): returns true if same card and same visible/hidden
 //
 /////////////////////////////////
 //	Stack : used for desk (that is: cards that are not in columns), for columns and for straights
@@ -336,6 +363,17 @@ function Card(rank, suit) {
 }
 
 //-----------------------------------------------------------------------------
+//returns true if same card and same visible/hidden
+//-----------------------------------------------------------------------------
+Card.prototype.match = function(other) {
+	//console.log(other.cardToDebug() + ' vs ' + this.cardToDebug());
+	if (other.rank != this.rank) return false;
+	if (other.suit != this.suit) return false;
+	if (other.visible != this.visible) return false;
+	return true;
+}
+
+//-----------------------------------------------------------------------------
 // link to a column
 // ARGS
 //	oCol : HTML div element
@@ -356,7 +394,7 @@ Card.prototype.setColumn = function(oCol, iPos) {
 }
 
 //-----------------------------------------------------------------------------
-// remove from the desk
+// remove from the deck
 //-----------------------------------------------------------------------------
 Card.prototype.remove = function() {
 	if (this.elt.parentNode) this.elt.parentNode.removeChild(this.elt);
@@ -383,10 +421,32 @@ Card.prototype.unhide = function() {
 }
 
 //-----------------------------------------------------------------------------
+// cardToChar(): Returns a letter representative of the card (for saving)
+//-----------------------------------------------------------------------------
+Card.prototype.cardToChar = function() {
+	switch (this.suit) {
+	case "C" :
+		return  String.fromCharCode(64 + this.rank);	// ace will be 'A', king will be 'M'
+	case "D" :
+		return  String.fromCharCode(77 + this.rank);	// ace will be 'N', king will be 'Z'
+	case "H" :
+		return  String.fromCharCode(96 + this.rank);	// ace will be 'a', king will be 'm'
+	case "S" :
+		return  String.fromCharCode(109 + this.rank);	// ace will be 'n', king will be 'z'
+	}
+}
+
+//-----------------------------------------------------------------------------
+// cardToString(): Returns the card as "3CH" for "3 of clubs, hidden"
+//-----------------------------------------------------------------------------
+Card.prototype.cardToDebug = function() {
+	return this.rank + this.suit + (this.visible ? 'V' : 'H');
+}
+
+//-----------------------------------------------------------------------------
 // cardToString(): Returns the name of a card (including rank and suit) as a
 // text string.
 //-----------------------------------------------------------------------------
-
 Card.prototype.cardToString = function() {
 	var rank, suit;
 
@@ -738,7 +798,7 @@ Stack.prototype.draw = function(n) {
 
 //-----------------------------------------------------------------------------
 // stackAdd(card): Adds the given card to the stack.
-//	ABR : returns the index of the card in the stack
+//	returns the index of the card in the stack
 //-----------------------------------------------------------------------------
 
 Stack.prototype.addCard = function(oCard) {
@@ -838,9 +898,10 @@ Stack.prototype.click = function() {
 			if (!col.isSuitable(higherCard, myMode)) continue;
 			// got a suitable destination, do the move
 			this.moveStraight(s, col);
-			this.unhideLast();
+			if (!this.unhideLast()) mkUndo();
 			incMove();
-			// check if win (greater mode, all suit complete and on the desk)
+			presentSituation = mkStringGame();
+			// check if win (greater mode, all suits complete and on the desk)
 			if (checkWinGreat()) return;
 			return;
 		}
@@ -848,13 +909,14 @@ Stack.prototype.click = function() {
 	if (s.cards.length == 13) {	// whole suit done
 		var suit = s.cards[0].suit;
 		for (var i = 0; i < finishedSuits.length; i++) {
-			//window.console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
+			//console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
 			if (finishedSuits[i].id.substr(4, 1) != suit) continue;
 			if (finishedSuits[i].style.color != 'transparent') continue;
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
 			this.moveStraight(s);	// remove from the desk
-			this.unhideLast();
+			if (!this.unhideLast()) mkUndo();
 			incMove();
+			presentSituation = mkStringGame();
 			// check if win (greater mode, all suit complete and on the desk)
 			if (checkWinGreat()) return;
 			// check if win (lesser mode)
@@ -898,11 +960,15 @@ Stack.prototype.dropStraight = function(oStraight) {
 
 //-----------------------------------------------------------------------------
 // unhide last card
+// return true if a card was unhidden (for undo management)
 //-----------------------------------------------------------------------------
 Stack.prototype.unhideLast = function() {
 	var c = this.lastCard();
 	if (c == undefined) return;
+	if (c.visible) return;
 	c.unhide();
+	resetUndo();	// no undo beyond this point
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -964,6 +1030,25 @@ Stack.prototype.respace = function() {
 		// redraw cards
 		for (var iPos = 1; iPos < nbCard; iPos++) this.cards[iPos].elt.style.top = (iPos * newSpacing) + 'px';
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Build save string for this column (bCol is true) or for the desk (bCol false or absent)
+//-----------------------------------------------------------------------------
+Stack.prototype.mkSaveString = function(bCol) {
+	var sSave = '';
+	var nCards = this.cards.length;
+	if (nCards == 0) return bCol ? ' ' : '';	// must put the separator even for empty columns
+	var bHidden = true;
+	for (var iCard = 0; iCard < nCards; iCard++) {
+		var oCard = this.cards[iCard];
+		if (bCol && bHidden && oCard.visible) {
+			sSave += ' ';	// separator between hidden and visible cards
+			bHidden = false;
+		}
+		sSave += oCard.cardToChar();
+	}
+	return sSave;
 }
 
 //=============================================================================
@@ -1046,24 +1131,25 @@ DragDrop.prototype.mouseUp = function(ev) {
 	//if (this.oCol) console.log('strait from column ' + this.oCol.n + ' dropped on column ' + (newCol ? newCol.n : '<none>'));
 	// no column : put it back
 	if (!newCol) {
-		//window.console.log('DragDrop.mouseUp, no newCol, back');
+		//console.log('DragDrop.mouseUp, no newCol, back');
 		this.moveBackOrig();
 	} else if (this.oCol == newCol) {
 		var tsNow;
 		if (ev.timeStamp) tsNow = ev.timeStamp;
 		else tsNow = +new Date();
-		//window.console.log('DragDrop.mouseUp, same column, time(ms)=' + (tsNow - this.tsStart) + ', ev.timeStamp=' + ev.timeStamp + ', new Date=' + (+new Date()) + ', this.tsStart=' + this.tsStart + ', tsNow=' + tsNow);
+		//console.log('DragDrop.mouseUp, same column, time(ms)=' + (tsNow - this.tsStart) + ', ev.timeStamp=' + ev.timeStamp + ', new Date=' + (+new Date()) + ', this.tsStart=' + this.tsStart + ', tsNow=' + tsNow);
 		if (tsNow < this.tsStart + 300) this.doClick();	// JS timestamp are in millisecond. Test here if less than 0,3 s
 		else this.moveBackOrig();
 	} else if (this.straight !== undefined) {
 		var higherCard = this.straight.cards[this.straight.cards.length - 1];
 		if (newCol.isSuitable(higherCard, 99)) {
 			newCol.dropStraight(this.straight);
-			this.oCol.unhideLast();
+			if (!this.oCol.unhideLast()) mkUndo();
 			incMove();
-			//window.console.log('DragDrop.mouseUp, drop here');
+			presentSituation = mkStringGame();
+			//console.log('DragDrop.mouseUp, drop here');
 		} else {
-			//window.console.log('DragDrop.mouseUp, not suitable');
+			//console.log('DragDrop.mouseUp, not suitable');
 			this.moveBackOrig();
 		}
 	}
@@ -1083,7 +1169,7 @@ DragDrop.prototype.doClick = function() {
 
 DragDrop.prototype.mouseMove = function(ev) {
 	var mousePos = mouseCoords(ev);
-	//window.console.log('DragDrop.MouveMove');
+	//console.log('DragDrop.MouveMove');
 	this.moveTo(mousePos);
 }
 
@@ -1111,16 +1197,295 @@ var deck;	// cards remaining to be dealt
 var cols;	// 10 columns
 var ddrop;	// dragDrop object, undefined when there is no active drag'n drop
 var finishedSuits = [];	// DIVs where to show finished suits
+var timestampStart;			// used to display elapsed time
+var idTimerElapsed;			// used to display elapsed time
+var nbMove;					// used to display number of moves for this game
+var presentSituation;		// because it is complex to know if we save an undo situation before the move, we save always the situation *after* the move here. The situation is saved into the cookies (or not) after *next* move
+var nbUndo = 0;
+
 //-----------------------------------------------------------------------------
 // global constants
 //-----------------------------------------------------------------------------
 var leftMargin = 10;		// from left of background to left of first column
 var columnSpacing = 102;	// from left of a column to left of next column
 var rightSuits = 100;		// from right of background to right of right completed suit
-var spacingSuits = 50;		// from right of a suit to right of the following suit
-var timestampStart;			// used to display elapsed time
-var idTimerElapsed;			// used to display elapsed time
-var nbMove;					// used to display number of moves for this game
+var spacingSuits = 35;		// from right of a suit to right of the following suit
+
+//-----------------------------------------------------------------------------
+// Build a string containing the current situation
+//-----------------------------------------------------------------------------
+function mkStringGame() {
+	// format
+	// each card is coded with a letter A, ..., Z, a, b, ... z (order ace to king, club to spade)
+	// break (change form one type to the next) is space
+	// column1, hidden cards
+	// column1, showed cards
+	// column2, 3,... 10
+	// deck
+	// number of moves (a number)
+	// timestamp of game start (a number)
+	var sSave = '';
+	// Columns
+	for (var iCol = 0; iCol < 10; iCol++) {
+		sSave += cols[iCol].mkSaveString(true) + ' ';
+	}
+	// deck, nb move, timestamp start
+	sSave += deck.mkSaveString(false) + ' ' + nbMove + ' ' + timestampStart;
+	//console.log('mkStringGame ' + sSave);
+	return sSave;
+}
+
+// http://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript
+function copyTextToClipboard(text) {
+	var textArea = document.createElement("textarea");
+	//
+	// *** This styling is an extra step which is likely not required. ***
+	//
+	// Why is it here? To ensure:
+	// 1. the element is able to have focus and selection.
+	// 2. if element was to flash render it has minimal visual impact.
+	// 3. less flakyness with selection and copying which **might** occur if
+	//    the textarea element is not visible.
+	//
+	// The likelihood is the element won't even render, not even a flash,
+	// so some of these are just precautions. However in IE the element
+	// is visible whilst the popup box asking the user for permission for
+	// the web page to copy to the clipboard.
+	//
+
+	// Place in top-left corner of screen regardless of scroll position.
+	textArea.style.position = 'fixed';
+	textArea.style.top = 0;
+	textArea.style.left = 0;
+
+	// Ensure it has a small width and height. Setting to 1px / 1em
+	// doesn't work as this gives a negative w/h on some browsers.
+	textArea.style.width = '2em';
+	textArea.style.height = '2em';
+
+	// We don't need padding, reducing the size if it does flash render.
+	textArea.style.padding = 0;
+
+	// Clean up any borders.
+	textArea.style.border = 'none';
+	textArea.style.outline = 'none';
+	textArea.style.boxShadow = 'none';
+
+	// Avoid flash of white box if rendered for any reason.
+	textArea.style.background = 'transparent';
+
+	textArea.value = text;
+
+	document.body.appendChild(textArea);
+
+	textArea.select();
+
+	var successful = document.execCommand('copy');
+
+	document.body.removeChild(textArea);
+	return successful;
+}
+
+// https://stackoverflow.com/questions/14733374/how-to-generate-md5-file-hash-on-javascript
+var MD5 = function(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,d,F,H,x;F=(G&2147483648);H=(k&2147483648);I=(G&1073741824);d=(k&1073741824);x=(G&1073741823)+(k&1073741823);if(I&d){return(x^2147483648^F^H)}if(I|d){if(x&1073741824){return(x^3221225472^F^H)}else{return(x^1073741824^F^H)}}else{return(x^F^H)}}function r(d,F,k){return(d&F)|((~d)&k)}function q(d,F,k){return(d&k)|(F&(~k))}function p(d,F,k){return(d^F^k)}function n(d,F,k){return(F^(d|(~k)))}function u(G,F,aa,Z,k,H,I){G=K(G,K(K(r(F,aa,Z),k),I));return K(L(G,H),F)}function f(G,F,aa,Z,k,H,I){G=K(G,K(K(q(F,aa,Z),k),I));return K(L(G,H),F)}function D(G,F,aa,Z,k,H,I){G=K(G,K(K(p(F,aa,Z),k),I));return K(L(G,H),F)}function t(G,F,aa,Z,k,H,I){G=K(G,K(K(n(F,aa,Z),k),I));return K(L(G,H),F)}function e(G){var Z;var F=G.length;var x=F+8;var k=(x-(x%64))/64;var I=(k+1)*16;var aa=Array(I-1);var d=0;var H=0;while(H<F){Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=(aa[Z]| (G.charCodeAt(H)<<d));H++}Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=aa[Z]|(128<<d);aa[I-2]=F<<3;aa[I-1]=F>>>29;return aa}function B(x){var k="",F="",G,d;for(d=0;d<=3;d++){G=(x>>>(d*8))&255;F="0"+G.toString(16);k=k+F.substr(F.length-2,2)}return k}function J(k){k=k.replace(/rn/g,"n");var d="";for(var F=0;F<k.length;F++){var x=k.charCodeAt(F);if(x<128){d+=String.fromCharCode(x)}else{if((x>127)&&(x<2048)){d+=String.fromCharCode((x>>6)|192);d+=String.fromCharCode((x&63)|128)}else{d+=String.fromCharCode((x>>12)|224);d+=String.fromCharCode(((x>>6)&63)|128);d+=String.fromCharCode((x&63)|128)}}}return d}var C=Array();var P,h,E,v,g,Y,X,W,V;var S=7,Q=12,N=17,M=22;var A=5,z=9,y=14,w=20;var o=4,m=11,l=16,j=23;var U=6,T=10,R=15,O=21;s=J(s);C=e(s);Y=1732584193;X=4023233417;W=2562383102;V=271733878;for(P=0;P<C.length;P+=16){h=Y;E=X;v=W;g=V;Y=u(Y,X,W,V,C[P+0],S,3614090360);V=u(V,Y,X,W,C[P+1],Q,3905402710);W=u(W,V,Y,X,C[P+2],N,606105819);X=u(X,W,V,Y,C[P+3],M,3250441966);Y=u(Y,X,W,V,C[P+4],S,4118548399);V=u(V,Y,X,W,C[P+5],Q,1200080426);W=u(W,V,Y,X,C[P+6],N,2821735955);X=u(X,W,V,Y,C[P+7],M,4249261313);Y=u(Y,X,W,V,C[P+8],S,1770035416);V=u(V,Y,X,W,C[P+9],Q,2336552879);W=u(W,V,Y,X,C[P+10],N,4294925233);X=u(X,W,V,Y,C[P+11],M,2304563134);Y=u(Y,X,W,V,C[P+12],S,1804603682);V=u(V,Y,X,W,C[P+13],Q,4254626195);W=u(W,V,Y,X,C[P+14],N,2792965006);X=u(X,W,V,Y,C[P+15],M,1236535329);Y=f(Y,X,W,V,C[P+1],A,4129170786);V=f(V,Y,X,W,C[P+6],z,3225465664);W=f(W,V,Y,X,C[P+11],y,643717713);X=f(X,W,V,Y,C[P+0],w,3921069994);Y=f(Y,X,W,V,C[P+5],A,3593408605);V=f(V,Y,X,W,C[P+10],z,38016083);W=f(W,V,Y,X,C[P+15],y,3634488961);X=f(X,W,V,Y,C[P+4],w,3889429448);Y=f(Y,X,W,V,C[P+9],A,568446438);V=f(V,Y,X,W,C[P+14],z,3275163606);W=f(W,V,Y,X,C[P+3],y,4107603335);X=f(X,W,V,Y,C[P+8],w,1163531501);Y=f(Y,X,W,V,C[P+13],A,2850285829);V=f(V,Y,X,W,C[P+2],z,4243563512);W=f(W,V,Y,X,C[P+7],y,1735328473);X=f(X,W,V,Y,C[P+12],w,2368359562);Y=D(Y,X,W,V,C[P+5],o,4294588738);V=D(V,Y,X,W,C[P+8],m,2272392833);W=D(W,V,Y,X,C[P+11],l,1839030562);X=D(X,W,V,Y,C[P+14],j,4259657740);Y=D(Y,X,W,V,C[P+1],o,2763975236);V=D(V,Y,X,W,C[P+4],m,1272893353);W=D(W,V,Y,X,C[P+7],l,4139469664);X=D(X,W,V,Y,C[P+10],j,3200236656);Y=D(Y,X,W,V,C[P+13],o,681279174);V=D(V,Y,X,W,C[P+0],m,3936430074);W=D(W,V,Y,X,C[P+3],l,3572445317);X=D(X,W,V,Y,C[P+6],j,76029189);Y=D(Y,X,W,V,C[P+9],o,3654602809);V=D(V,Y,X,W,C[P+12],m,3873151461);W=D(W,V,Y,X,C[P+15],l,530742520);X=D(X,W,V,Y,C[P+2],j,3299628645);Y=t(Y,X,W,V,C[P+0],U,4096336452);V=t(V,Y,X,W,C[P+7],T,1126891415);W=t(W,V,Y,X,C[P+14],R,2878612391);X=t(X,W,V,Y,C[P+5],O,4237533241);Y=t(Y,X,W,V,C[P+12],U,1700485571);V=t(V,Y,X,W,C[P+3],T,2399980690);W=t(W,V,Y,X,C[P+10],R,4293915773);X=t(X,W,V,Y,C[P+1],O,2240044497);Y=t(Y,X,W,V,C[P+8],U,1873313359);V=t(V,Y,X,W,C[P+15],T,4264355552);W=t(W,V,Y,X,C[P+6],R,2734768916);X=t(X,W,V,Y,C[P+13],O,1309151649);Y=t(Y,X,W,V,C[P+4],U,4149444226);V=t(V,Y,X,W,C[P+11],T,3174756917);W=t(W,V,Y,X,C[P+2],R,718787259);X=t(X,W,V,Y,C[P+9],O,3951481745);Y=K(Y,h);X=K(X,E);W=K(W,v);V=K(V,g)}var i=B(Y)+B(X)+B(W)+B(V);return i.toLowerCase()};
+
+//-----------------------------------------------------------------------------
+// extract one cookies
+// https://www.w3schools.com/js/js_cookies.asp
+//-----------------------------------------------------------------------------
+function getCookie(cname) {
+	var name = cname + "=";
+	var decodedCookie = decodeURIComponent(document.cookie);
+	var ca = decodedCookie.split(';');
+	for(var i = 0; i <ca.length; i++) {
+		var c = ca[i];
+		while (c.charAt(0) == ' ') {
+			c = c.substring(1);
+		}
+		if (c.indexOf(name) == 0) {
+			return c.substring(name.length, c.length);
+		}
+	}
+	return "";
+}
+
+//-----------------------------------------------------------------------------
+// return to previous situation
+//-----------------------------------------------------------------------------
+function undoGame() {
+	if (nbUndo == 0) {
+		flashUndo();
+		return;
+	}
+	var sName = 'ArachnidJSundo' + (nbUndo - 1);
+	if (!reloadGame(getCookie(sName))) {
+		flashUndo();
+		return;
+	}
+	nbUndo--;
+	//console.log('End undoGame, nbUndo=' + nbUndo + ', sName=' + sName);
+}
+
+//-----------------------------------------------------------------------------
+// Clean undo buffer (when a card has been unhidden)
+//-----------------------------------------------------------------------------
+function flashUndo() {
+	var elt = document.getElementById('undo');
+	elt.className = 'butFlashed';
+	window.setTimeout(function() {elt.className = 'but';}, 100);
+	window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
+	window.setTimeout(function() {elt.className = 'but';}, 300);
+}
+
+//-----------------------------------------------------------------------------
+// build a table of cards from the string in the undo buffer
+// return nothing if error
+//-----------------------------------------------------------------------------
+function buildCardArray(s) {
+	var tabRet = new Array;
+	var visible = false;	// hidden cards coming first
+	//console.log('buildCardArray ' + s);
+	for (var i = 0; i < s.length; i++) {
+		var v = s.charCodeAt(i);
+		if (v >= 65 && v <= 77) {	// clubs ace will be 'A', king will be 'M'
+			var c = new Card(v-64, 'C');
+		} else if (v >= 78 && v <= 90) {	// diamonds ace will be 'N', king will be 'Z'
+			c = new Card(v-77, 'D');
+		} else if (v >= 97 && v <= 109) {	// hearts ace will be 'a', king will be 'm'
+			c = new Card(v-96, 'H');
+		} else if (v >= 110 && v <= 122) {	// spades ace will be 'n', king will be 'z'
+			c = new Card(v-109, 'S');
+		} else if (v == 32) {	// space is separator between hidden and visible
+			visible = true;
+			continue;
+		} else {
+			return;	// error
+		}
+		if (visible) c.visible = true;
+		tabRet.push(c);
+		//console.log('push ' + c.cardToDebug());
+	}
+	return tabRet;
+}
+
+//-----------------------------------------------------------------------------
+// Reload game from undo buffer
+//-----------------------------------------------------------------------------
+function reloadGame(sSave) {
+	//console.log('reloadGame ' + sSave);
+	tabSave = sSave.split(' ');
+	// columns
+	for (var iCol = 0; iCol < 10; iCol++) {
+		oCol = cols[iCol];
+		var Cards = buildCardArray(tabSave[iCol * 2] + ' ' + tabSave[iCol * 2 + 1]);
+		if (Cards === undefined) return;	// error
+		for (var iCard = 0; iCard < Cards.length; iCard++) {
+			// avoid the painful (for the navigator) process of removing the card element if possible
+			if (iCard >= oCol.cards.length) break;
+			if (!oCol.cards[iCard].match(Cards[iCard])) {
+				//console.log('reloadGame, iCol=' + iCol + ', iCard=' + iCard + ', col ' + oCol.cards[iCard].cardToDebug() + ', undo ' + Cards[iCard].cardToDebug());
+				break;
+			}
+		}
+		// remove remaining cards on the desk (and delete HTML elements)
+		for (var iCard2 = oCol.cards.length - 1; iCard2 >= iCard; iCard2--) oCol.cards[iCard2].remove();
+		oCol.cards.length = iCard;	// truncate the array
+		// add additional cards
+		for (iCard2 = iCard; iCard2 < Cards.length; iCard2++) {
+			var i = oCol.addCard(Cards[iCard2]);
+			if (Cards[iCard2].visible) oCol.cards[i].unhide();
+		}
+	}
+	// deck
+	// number of moves
+	nbMove = Math.round(tabSave[21]);
+	showMoves();
+	// timestamp of game start
+	timestampStart = Math.round(tabSave[22]);
+	showElapsed();
+	presentSituation = mkStringGame();
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Clean undo buffer (when a card has been unhidden)
+//-----------------------------------------------------------------------------
+function resetUndo() {
+	// remove undo cookies (derived from https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript)
+	document.cookie.split(";").forEach(function(c) {
+		c = c.replace(/^ +/, "");
+		if (c.substr(0, 14) != 'ArachnidJSundo') return;	// don't mess up other cookies
+		document.cookie = c.replace(/=.*/, "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"); 
+		});
+	nbUndo = 0;
+	//document.getElementById('log').firstChild.textContent = document.cookie;
+}
+
+//-----------------------------------------------------------------------------
+// Restore current situation
+// return true if OK, false if unable to undo
+//-----------------------------------------------------------------------------
+function restoreGame() {
+	alert('Sorry, not yet');
+}
+
+//-----------------------------------------------------------------------------
+// Save data into a file on disk
+// https://stackoverflow.com/questions/13405129/javascript-create-and-save-file
+//-----------------------------------------------------------------------------
+function download(data, filename, type) {
+	var file = new Blob([data], {type: type});
+	if (window.navigator.msSaveOrOpenBlob) // IE10+
+		window.navigator.msSaveOrOpenBlob(file, filename);
+	else { // Others
+		var a = document.createElement("a"),
+				url = URL.createObjectURL(file);
+		a.href = url;
+		a.download = filename;
+		document.body.appendChild(a);
+		a.click();
+		setTimeout(function() {
+			document.body.removeChild(a);
+			window.URL.revokeObjectURL(url);  
+		}, 0); 
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Pad a number to 2 chars
+//-----------------------------------------------------------------------------
+function pad(n) {return n<10 ? '0'+n : n}
+
+//-----------------------------------------------------------------------------
+// Put the present situation into a file or into the clipboard
+//	Works only in reaction to a user click
+//-----------------------------------------------------------------------------
+function saveGame() {
+	var sSave = mkStringGame();
+	sSave = 'ArachnidJS ' + sSave + ' ' + MD5(sSave);
+	try {
+		var dNow = new Date();
+		var sNow = dNow.getFullYear() + '' + (pad(dNow.getMonth() + 1)) + '' + pad(dNow.getDate()) + '-' +
+			  pad(dNow.getHours()) + '' + pad(dNow.getMinutes()) + '' + pad(dNow.getSeconds());
+		download(sSave, 'ArachnidJS-' + sNow + '.txt', 'txt');
+		return;
+	} catch (e) {
+	}
+//	fall back to clipboard version
+	var bSuccess = copyTextToClipboard(sSave);
+	if (bSuccess) alert('Game has been copied into your Clipboard\nPaste it into a new text file (you can use notepad)');
+	else          alert('Failed to generate saved game');
+}
+
+//-----------------------------------------------------------------------------
+// Put the previous situation into a cookies
+//-----------------------------------------------------------------------------
+function mkUndo() {
+	if (presentSituation)
+		document.cookie = 'ArachnidJSundo' + nbUndo + '=' + presentSituation + ';path=/';
+	//document.getElementById('log').firstChild.textContent = document.cookie;
+	nbUndo++;
+}
 
 //-----------------------------------------------------------------------------
 // Check if the 8 suits are whole and on the desk. Show Win message if yes (and return true)
@@ -1181,9 +1546,10 @@ function win(level) {
 			e.firstChild.textContent  = "Two stacks: rarely seen!";
 			break;
 		default:
-			e.firstChild.textContent  = level + " stacks: never seen, consider registering to the Guiness book!";
+			e.firstChild.textContent  = level + " stacks: never seen, consider applying to the Guiness book!";
 			break;
 	}
+	killTimerElapsed();
 }
 
 //-----------------------------------------------------------------------------
@@ -1216,7 +1582,7 @@ function initA() {
 	window.onresize = windowResize;
 	window.orientationChange = windowResize;
 	// debug right click
-	//document.body.oncontextmenu = function(ev) {ev = ev || window.event; target = ev.target || ev.srcElement; window.console.log('debugRightClick ev.target' + ev.target.id);};
+	//document.body.oncontextmenu = function(ev) {ev = ev || window.event; target = ev.target || ev.srcElement; console.log('debugRightClick ev.target' + ev.target.id);};
 	// initialize new game
 	newGame();
 }
@@ -1225,23 +1591,31 @@ function initA() {
 // deal a row
 //-----------------------------------------------------------------------------
 function dealRow() {
-	var iCol, oCard;
+	var iCol, oCard, bBlocked;
+	// no deal if there is at least one empty column
+	for (iCol = 0; iCol < 10; iCol++) {
+		if (cols[iCol].cards.length == 0) bBlocked = true;
+	}
+	// no deal if there are no more cards to deal
+	if (deck.cards.length == 0)  bBlocked = true;
+	if (bBlocked) {
+		// flash deal button
+		var elt = document.getElementById('deal');
+		elt.className = 'butFlashed';
+		window.setTimeout(function() {elt.className = 'but';}, 100);
+		window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
+		window.setTimeout(function() {elt.className = 'but';}, 300);
+		return;
+	}
 	for (iCol = 0; iCol < 10; iCol++) {
 		oCard = deck.deal();	// get next dealed card
-		if (oCard == undefined) {	// nothing left to deal
-			// flash deal button
-			var elt = document.getElementById('deal');
-			elt.className = 'butFlashed';
-			window.setTimeout(function() {elt.className = 'but';}, 100);
-			window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
-			window.setTimeout(function() {elt.className = 'but';}, 300);
-			return;
-		}
 		cols[iCol].addCard(oCard);
 		oCard.unhide();
 		cols[iCol].respace();
 	}
 	showDealt();
+	resetUndo();	// block undo because some cards where unhidden 
+	presentSituation = mkStringGame();
 }
 
 //-----------------------------------------------------------------------------
@@ -1255,7 +1629,7 @@ function showDealt() {
 // new game
 //-----------------------------------------------------------------------------
 function normalGame() {
-	deck.shuffle(1);
+	deck.shuffle(5);
 	for (var iCol = 0; iCol < 10; iCol++) {
 		// empty
 		cols[iCol].clear();
@@ -1397,6 +1771,8 @@ function newGame() {
 	idTimerElapsed = setInterval(showElapsed, 1000);
 	nbMove = 0;
 	showMoves();
+	mkUndo();	// allow to undo across newGame
+	presentSituation = mkStringGame();
 }
 
 //-----------------------------------------------------------------------------
@@ -1414,7 +1790,7 @@ function windowResize(ev){
 function mouseUp(ev){
 	if (ddrop) {
 		ddrop.mouseUp(ev);
-		//window.console.log('delete ddrop');
+		//console.log('delete ddrop');
 	}
 	ddrop = undefined;
 }
@@ -1430,11 +1806,16 @@ function mouseDown(ev){
 	</script>
 </head>
 <body onload="initA();">
+&nbsp;
 <div id="bkground">
+<div id="log">&nbsp;</div>
 <div id="deal" class="but" onclick="dealRow()">Deal row</div>
 <div id="new"  class="but" onclick="newGame()">New game</div>
 <div id="elapsed" class="topinfo">0 s</div>
 <div id="moves" class="topinfo">0 move</div>
+<div id="save" class="but" onclick="saveGame()">Save</div>
+<div id="restore" class="but" onclick="restoreGame()">Restore</div>
+<div id="undo" class="but" onclick="undoGame()">Undo</div>
 <div id="dealt"  class="topinfo"></div>
 <div id="col0" class="column"></div>
 <div id="col1" class="column"></div>
