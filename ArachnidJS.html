@@ -15,7 +15,9 @@
 
 /******************************************************************************
 * TODO
+* initA : reset nUndo from cookies
 * restore
+* undo and deal row grayed when not possible
 * process Touch events
 * 
 ******************************************************************************/
@@ -44,7 +46,7 @@ html, body {
 	left: 0;
 }
 
-.but, .butFlashed {
+.but, .butFlashed, .butGrayed {
 	position: absolute;
 	border: solid blue 2px;
 	cursor: pointer;
@@ -57,6 +59,10 @@ html, body {
 
 .butFlashed {
 	background-color: black;
+}
+
+.butGrayed {
+	background-color: #808080;
 }
 
 .topinfo {
@@ -898,9 +904,9 @@ Stack.prototype.click = function() {
 			if (!col.isSuitable(higherCard, myMode)) continue;
 			// got a suitable destination, do the move
 			this.moveStraight(s, col);
-			if (!this.unhideLast()) mkUndo();
+			if (!this.unhideLast()) oUndo.push();
 			incMove();
-			presentSituation = mkStringGame();
+			oUndo.savePresentSituation(mkStringGame());
 			// check if win (greater mode, all suits complete and on the desk)
 			if (checkWinGreat()) return;
 			return;
@@ -914,9 +920,9 @@ Stack.prototype.click = function() {
 			if (finishedSuits[i].style.color != 'transparent') continue;
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
 			this.moveStraight(s);	// remove from the desk
-			if (!this.unhideLast()) mkUndo();
+			if (!this.unhideLast()) oUndo.push();
 			incMove();
-			presentSituation = mkStringGame();
+			oUndo.savePresentSituation(mkStringGame());
 			// check if win (greater mode, all suit complete and on the desk)
 			if (checkWinGreat()) return;
 			// check if win (lesser mode)
@@ -967,7 +973,7 @@ Stack.prototype.unhideLast = function() {
 	if (c == undefined) return;
 	if (c.visible) return;
 	c.unhide();
-	resetUndo();	// no undo beyond this point
+	oUndo.clear();	// no undo beyond this point
 	return true;
 }
 
@@ -1144,9 +1150,9 @@ DragDrop.prototype.mouseUp = function(ev) {
 		var higherCard = this.straight.cards[this.straight.cards.length - 1];
 		if (newCol.isSuitable(higherCard, 99)) {
 			newCol.dropStraight(this.straight);
-			if (!this.oCol.unhideLast()) mkUndo();
+			if (!this.oCol.unhideLast()) oUndo.push();
 			incMove();
-			presentSituation = mkStringGame();
+			oUndo.savePresentSituation(mkStringGame());
 			//console.log('DragDrop.mouseUp, drop here');
 		} else {
 			//console.log('DragDrop.mouseUp, not suitable');
@@ -1187,6 +1193,166 @@ DragDrop.prototype.moveTo = function(pos) {
 }
 
 //=============================================================================
+// undo Object
+// local variables:
+//	presentSituation (because it is complex to know if we will save an undo situation before the move, we save always the situation *after* the move here)
+//	undoBuffer
+//=============================================================================
+//-----------------------------------------------------------------------------
+// undo : initialize and load from local storage
+//-----------------------------------------------------------------------------
+function classUndo() {
+	this.undoBuffer = new Array();
+	// reload from storage, set color of undo button
+	if (window.localStorage) {
+		this.presentSituation = window.localStorage.getItem('ArachnidJSPresent');
+		console.log('classUndo, localStorage.length=' + localStorage.length);
+		for (var i = 0, len = localStorage.length; i < len; ++i ) {
+			console.log('classUndo, key[' + i + ']=' + localStorage.key(i));
+			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') continue;
+			var n = parseInt(localStorage.key(i).substr(14));
+			console.log('classUndo, n=' + n);
+			if (!isNaN(n)) this.undoBuffer[n] = window.localStorage.getItem(localStorage.key(i));
+		}
+	} else {
+		// fall back to cookies
+		document.cookie.split(";").forEach(function(c) {
+			c = c.replace(/^ +/, "");
+			if (c.substr(0, 18) == 'ArachnidJSPresent=') {
+				this.presentSituation = c.substr(18);
+				return;
+			}
+			if (c.substr(0, 14) != 'ArachnidJSundo') return;
+			var m = c.match(/^ArachnidJSundo(\d*)=(.*)$/);
+			if (!m) return;
+			this.undoBuffer[parseInt(m[0])] = m[1];
+			});
+	}
+	if (this.undoBuffer.length > 0) this.enableButton();
+	else                            this.disableButton();
+}
+
+//-----------------------------------------------------------------------------
+// undo managing : push previous situation into undo buffer
+//-----------------------------------------------------------------------------
+classUndo.prototype.push = function() {
+	if (!this.presentSituation) return
+	//document.cookie = 'ArachnidJSundo' + nbUndo + '=' + presentSituation + ';path=/';
+	//document.getElementById('log').firstChild.textContent = document.cookie;
+	var nb = this.undoBuffer.length;
+	this.undoBuffer.push(this.presentSituation);
+	if (window.localStorage) {
+		window.localStorage.setItem('ArachnidJSundo' +nb, this.presentSituation);
+	} else {
+		// fall back to cookies
+		document.cookie = 'ArachnidJSundo' + nb + '=' + this.presentSituation;
+	}
+	//this.nbUndo++;
+	this.enableButton();
+}
+
+//-----------------------------------------------------------------------------
+// undo managing : save present situation
+//-----------------------------------------------------------------------------
+classUndo.prototype.savePresentSituation = function(sSituation) {
+	this.presentSituation = sSituation;
+	if (window.localStorage) {
+		window.localStorage.setItem('ArachnidJSPresent', sSituation);
+	} else {
+		// fall back to cookies
+		document.cookie = 'ArachnidJSPresent=' + sSituation;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// undo managing : clear undo buffer (when a card has been unhidden)
+//-----------------------------------------------------------------------------
+classUndo.prototype.clear = function() {
+	this.undoBuffer.length = 0;
+	if (window.localStorage) {
+		for (var i = 0, len = localStorage.length; i < len; ++i ) {
+			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') continue;
+			localStorage.removeItem(localStorage.key(i));
+		}
+	} else {
+		// fall back to cookies (code derived from https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript)
+		document.cookie.split(";").forEach(function(c) {
+			c = c.replace(/^ +/, "");
+			if (c.substr(0, 14) != 'ArachnidJSundo') return;	// don't mess up other cookies
+			document.cookie = c.replace(/=.*/, "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"); 
+			});
+	}
+	this.disableButton();
+	//document.getElementById('log').firstChild.textContent = document.cookie;
+}
+
+//-----------------------------------------------------------------------------
+// return to previous situation
+//-----------------------------------------------------------------------------
+classUndo.prototype.undoGame = function() {
+	if (this.undoBuffer.length == 0) {
+		this.flashButton();
+		return;
+	}
+	/*
+	var sName = 'ArachnidJSundo' + (nbUndo - 1);
+	if (!reloadGame(getCookie(sName))) {
+		flashButton();
+		return;
+	}
+	*/
+	var nb = this.undoBuffer.length - 1;
+	if (!reloadGame(this.undoBuffer[nb])) {
+		this.flashButton();
+		return;
+	}
+	this.undoBuffer.length = nb;	// truncate the array
+	if (window.localStorage) {
+		localStorage.removeItem('ArachnidJSundo' + nb);
+	} else {
+		// fall back to cookies
+		document.cookie = 'ArachnidJSundo' + nb + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'; 
+	}
+	if (nb == 0) this.disableButton();
+	//console.log('End undoGame, nbUndo=' + nbUndo + ', sName=' + sName);
+}
+
+//-----------------------------------------------------------------------------
+// gray undo button
+//-----------------------------------------------------------------------------
+classUndo.prototype.disableButton = function() {
+	var elt = document.getElementById('undo');
+	elt.className = 'butGrayed';
+}
+
+//-----------------------------------------------------------------------------
+// Set button to active color undo button
+//-----------------------------------------------------------------------------
+classUndo.prototype.enableButton = function() {
+	var elt = document.getElementById('undo');
+	elt.className = 'but';
+}
+
+//-----------------------------------------------------------------------------
+// Flash undo button
+//-----------------------------------------------------------------------------
+classUndo.prototype.flashButton = function() {
+	var elt = document.getElementById('undo');
+	elt.className = 'butFlashed';
+	window.setTimeout(function() {elt.className = 'but';}, 100);
+	window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
+	window.setTimeout(function() {elt.className = 'butGrayed';}, 300);
+}
+
+//-----------------------------------------------------------------------------
+// Reload game from present buffer. Used only in initA()
+//	return true is a game was successfully reloaded
+//-----------------------------------------------------------------------------
+classUndo.prototype.reloadPresent = function() {
+	if (this.presentSituation) return reloadGame(this.presentSituation);
+}
+
+//=============================================================================
 // End of objects
 //=============================================================================
 
@@ -1200,8 +1366,7 @@ var finishedSuits = [];	// DIVs where to show finished suits
 var timestampStart;			// used to display elapsed time
 var idTimerElapsed;			// used to display elapsed time
 var nbMove;					// used to display number of moves for this game
-var presentSituation;		// because it is complex to know if we save an undo situation before the move, we save always the situation *after* the move here. The situation is saved into the cookies (or not) after *next* move
-var nbUndo = 0;
+var oUndo;	// undo object
 
 //-----------------------------------------------------------------------------
 // global constants
@@ -1290,54 +1455,6 @@ function copyTextToClipboard(text) {
 var MD5 = function(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,d,F,H,x;F=(G&2147483648);H=(k&2147483648);I=(G&1073741824);d=(k&1073741824);x=(G&1073741823)+(k&1073741823);if(I&d){return(x^2147483648^F^H)}if(I|d){if(x&1073741824){return(x^3221225472^F^H)}else{return(x^1073741824^F^H)}}else{return(x^F^H)}}function r(d,F,k){return(d&F)|((~d)&k)}function q(d,F,k){return(d&k)|(F&(~k))}function p(d,F,k){return(d^F^k)}function n(d,F,k){return(F^(d|(~k)))}function u(G,F,aa,Z,k,H,I){G=K(G,K(K(r(F,aa,Z),k),I));return K(L(G,H),F)}function f(G,F,aa,Z,k,H,I){G=K(G,K(K(q(F,aa,Z),k),I));return K(L(G,H),F)}function D(G,F,aa,Z,k,H,I){G=K(G,K(K(p(F,aa,Z),k),I));return K(L(G,H),F)}function t(G,F,aa,Z,k,H,I){G=K(G,K(K(n(F,aa,Z),k),I));return K(L(G,H),F)}function e(G){var Z;var F=G.length;var x=F+8;var k=(x-(x%64))/64;var I=(k+1)*16;var aa=Array(I-1);var d=0;var H=0;while(H<F){Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=(aa[Z]| (G.charCodeAt(H)<<d));H++}Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=aa[Z]|(128<<d);aa[I-2]=F<<3;aa[I-1]=F>>>29;return aa}function B(x){var k="",F="",G,d;for(d=0;d<=3;d++){G=(x>>>(d*8))&255;F="0"+G.toString(16);k=k+F.substr(F.length-2,2)}return k}function J(k){k=k.replace(/rn/g,"n");var d="";for(var F=0;F<k.length;F++){var x=k.charCodeAt(F);if(x<128){d+=String.fromCharCode(x)}else{if((x>127)&&(x<2048)){d+=String.fromCharCode((x>>6)|192);d+=String.fromCharCode((x&63)|128)}else{d+=String.fromCharCode((x>>12)|224);d+=String.fromCharCode(((x>>6)&63)|128);d+=String.fromCharCode((x&63)|128)}}}return d}var C=Array();var P,h,E,v,g,Y,X,W,V;var S=7,Q=12,N=17,M=22;var A=5,z=9,y=14,w=20;var o=4,m=11,l=16,j=23;var U=6,T=10,R=15,O=21;s=J(s);C=e(s);Y=1732584193;X=4023233417;W=2562383102;V=271733878;for(P=0;P<C.length;P+=16){h=Y;E=X;v=W;g=V;Y=u(Y,X,W,V,C[P+0],S,3614090360);V=u(V,Y,X,W,C[P+1],Q,3905402710);W=u(W,V,Y,X,C[P+2],N,606105819);X=u(X,W,V,Y,C[P+3],M,3250441966);Y=u(Y,X,W,V,C[P+4],S,4118548399);V=u(V,Y,X,W,C[P+5],Q,1200080426);W=u(W,V,Y,X,C[P+6],N,2821735955);X=u(X,W,V,Y,C[P+7],M,4249261313);Y=u(Y,X,W,V,C[P+8],S,1770035416);V=u(V,Y,X,W,C[P+9],Q,2336552879);W=u(W,V,Y,X,C[P+10],N,4294925233);X=u(X,W,V,Y,C[P+11],M,2304563134);Y=u(Y,X,W,V,C[P+12],S,1804603682);V=u(V,Y,X,W,C[P+13],Q,4254626195);W=u(W,V,Y,X,C[P+14],N,2792965006);X=u(X,W,V,Y,C[P+15],M,1236535329);Y=f(Y,X,W,V,C[P+1],A,4129170786);V=f(V,Y,X,W,C[P+6],z,3225465664);W=f(W,V,Y,X,C[P+11],y,643717713);X=f(X,W,V,Y,C[P+0],w,3921069994);Y=f(Y,X,W,V,C[P+5],A,3593408605);V=f(V,Y,X,W,C[P+10],z,38016083);W=f(W,V,Y,X,C[P+15],y,3634488961);X=f(X,W,V,Y,C[P+4],w,3889429448);Y=f(Y,X,W,V,C[P+9],A,568446438);V=f(V,Y,X,W,C[P+14],z,3275163606);W=f(W,V,Y,X,C[P+3],y,4107603335);X=f(X,W,V,Y,C[P+8],w,1163531501);Y=f(Y,X,W,V,C[P+13],A,2850285829);V=f(V,Y,X,W,C[P+2],z,4243563512);W=f(W,V,Y,X,C[P+7],y,1735328473);X=f(X,W,V,Y,C[P+12],w,2368359562);Y=D(Y,X,W,V,C[P+5],o,4294588738);V=D(V,Y,X,W,C[P+8],m,2272392833);W=D(W,V,Y,X,C[P+11],l,1839030562);X=D(X,W,V,Y,C[P+14],j,4259657740);Y=D(Y,X,W,V,C[P+1],o,2763975236);V=D(V,Y,X,W,C[P+4],m,1272893353);W=D(W,V,Y,X,C[P+7],l,4139469664);X=D(X,W,V,Y,C[P+10],j,3200236656);Y=D(Y,X,W,V,C[P+13],o,681279174);V=D(V,Y,X,W,C[P+0],m,3936430074);W=D(W,V,Y,X,C[P+3],l,3572445317);X=D(X,W,V,Y,C[P+6],j,76029189);Y=D(Y,X,W,V,C[P+9],o,3654602809);V=D(V,Y,X,W,C[P+12],m,3873151461);W=D(W,V,Y,X,C[P+15],l,530742520);X=D(X,W,V,Y,C[P+2],j,3299628645);Y=t(Y,X,W,V,C[P+0],U,4096336452);V=t(V,Y,X,W,C[P+7],T,1126891415);W=t(W,V,Y,X,C[P+14],R,2878612391);X=t(X,W,V,Y,C[P+5],O,4237533241);Y=t(Y,X,W,V,C[P+12],U,1700485571);V=t(V,Y,X,W,C[P+3],T,2399980690);W=t(W,V,Y,X,C[P+10],R,4293915773);X=t(X,W,V,Y,C[P+1],O,2240044497);Y=t(Y,X,W,V,C[P+8],U,1873313359);V=t(V,Y,X,W,C[P+15],T,4264355552);W=t(W,V,Y,X,C[P+6],R,2734768916);X=t(X,W,V,Y,C[P+13],O,1309151649);Y=t(Y,X,W,V,C[P+4],U,4149444226);V=t(V,Y,X,W,C[P+11],T,3174756917);W=t(W,V,Y,X,C[P+2],R,718787259);X=t(X,W,V,Y,C[P+9],O,3951481745);Y=K(Y,h);X=K(X,E);W=K(W,v);V=K(V,g)}var i=B(Y)+B(X)+B(W)+B(V);return i.toLowerCase()};
 
 //-----------------------------------------------------------------------------
-// extract one cookies
-// https://www.w3schools.com/js/js_cookies.asp
-//-----------------------------------------------------------------------------
-function getCookie(cname) {
-	var name = cname + "=";
-	var decodedCookie = decodeURIComponent(document.cookie);
-	var ca = decodedCookie.split(';');
-	for(var i = 0; i <ca.length; i++) {
-		var c = ca[i];
-		while (c.charAt(0) == ' ') {
-			c = c.substring(1);
-		}
-		if (c.indexOf(name) == 0) {
-			return c.substring(name.length, c.length);
-		}
-	}
-	return "";
-}
-
-//-----------------------------------------------------------------------------
-// return to previous situation
-//-----------------------------------------------------------------------------
-function undoGame() {
-	if (nbUndo == 0) {
-		flashUndo();
-		return;
-	}
-	var sName = 'ArachnidJSundo' + (nbUndo - 1);
-	if (!reloadGame(getCookie(sName))) {
-		flashUndo();
-		return;
-	}
-	nbUndo--;
-	//console.log('End undoGame, nbUndo=' + nbUndo + ', sName=' + sName);
-}
-
-//-----------------------------------------------------------------------------
-// Clean undo buffer (when a card has been unhidden)
-//-----------------------------------------------------------------------------
-function flashUndo() {
-	var elt = document.getElementById('undo');
-	elt.className = 'butFlashed';
-	window.setTimeout(function() {elt.className = 'but';}, 100);
-	window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
-	window.setTimeout(function() {elt.className = 'but';}, 300);
-}
-
-//-----------------------------------------------------------------------------
 // build a table of cards from the string in the undo buffer
 // return nothing if error
 //-----------------------------------------------------------------------------
@@ -1369,7 +1486,7 @@ function buildCardArray(s) {
 }
 
 //-----------------------------------------------------------------------------
-// Reload game from undo buffer
+// Reload game from undo buffer (return false if error)
 //-----------------------------------------------------------------------------
 function reloadGame(sSave) {
 	//console.log('reloadGame ' + sSave);
@@ -1403,22 +1520,8 @@ function reloadGame(sSave) {
 	// timestamp of game start
 	timestampStart = Math.round(tabSave[22]);
 	showElapsed();
-	presentSituation = mkStringGame();
+	oUndo.savePresentSituation(mkStringGame());
 	return true;
-}
-
-//-----------------------------------------------------------------------------
-// Clean undo buffer (when a card has been unhidden)
-//-----------------------------------------------------------------------------
-function resetUndo() {
-	// remove undo cookies (derived from https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript)
-	document.cookie.split(";").forEach(function(c) {
-		c = c.replace(/^ +/, "");
-		if (c.substr(0, 14) != 'ArachnidJSundo') return;	// don't mess up other cookies
-		document.cookie = c.replace(/=.*/, "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"); 
-		});
-	nbUndo = 0;
-	//document.getElementById('log').firstChild.textContent = document.cookie;
 }
 
 //-----------------------------------------------------------------------------
@@ -1462,29 +1565,20 @@ function pad(n) {return n<10 ? '0'+n : n}
 //-----------------------------------------------------------------------------
 function saveGame() {
 	var sSave = mkStringGame();
-	sSave = 'ArachnidJS ' + sSave + ' ' + MD5(sSave);
+	sSave = 'ArachnidJS ' + sSave + ' ' + MD5(sSave + ' ');	// always add salt when doing MD5 cooking
 	try {
+		// "file download" version
 		var dNow = new Date();
-		var sNow = dNow.getFullYear() + '' + (pad(dNow.getMonth() + 1)) + '' + pad(dNow.getDate()) + '-' +
+		var sNow = dNow.getFullYear() + '' + pad(dNow.getMonth() + 1) + '' + pad(dNow.getDate()) + '-' +
 			  pad(dNow.getHours()) + '' + pad(dNow.getMinutes()) + '' + pad(dNow.getSeconds());
 		download(sSave, 'ArachnidJS-' + sNow + '.txt', 'txt');
 		return;
 	} catch (e) {
 	}
-//	fall back to clipboard version
+//	fall back to "clipboard" version
 	var bSuccess = copyTextToClipboard(sSave);
 	if (bSuccess) alert('Game has been copied into your Clipboard\nPaste it into a new text file (you can use notepad)');
 	else          alert('Failed to generate saved game');
-}
-
-//-----------------------------------------------------------------------------
-// Put the previous situation into a cookies
-//-----------------------------------------------------------------------------
-function mkUndo() {
-	if (presentSituation)
-		document.cookie = 'ArachnidJSundo' + nbUndo + '=' + presentSituation + ';path=/';
-	//document.getElementById('log').firstChild.textContent = document.cookie;
-	nbUndo++;
 }
 
 //-----------------------------------------------------------------------------
@@ -1583,8 +1677,26 @@ function initA() {
 	window.orientationChange = windowResize;
 	// debug right click
 	//document.body.oncontextmenu = function(ev) {ev = ev || window.event; target = ev.target || ev.srcElement; console.log('debugRightClick ev.target' + ev.target.id);};
-	// initialize new game
-	newGame();
+	
+	/*
+	// update nbUndo according to the cookies (derived from https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript)
+	console.log('InitA, cookies=' + document.cookie);
+	document.cookie.split(";").forEach(function(c) {
+		c = c.replace(/^ +/, "");
+		if (c.substr(0, 14) != 'ArachnidJSundo') return;
+		c = c.replace(/=.*$/, "");
+		var i = parseInt(c.substr(14));
+		if (i >= nbUndo) nbUndo = i+1;
+		});
+	*/
+	// initialize undo mechanism
+	oUndo = new classUndo();
+	// reload current (before browser was halted or before F5) or initialize new game
+	if (oUndo.reloadPresent()) {
+		idTimerElapsed = setInterval(showElapsed, 1000);
+	} else {
+		newGame();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1604,7 +1716,7 @@ function dealRow() {
 		elt.className = 'butFlashed';
 		window.setTimeout(function() {elt.className = 'but';}, 100);
 		window.setTimeout(function() {elt.className = 'butFlashed';}, 200);
-		window.setTimeout(function() {elt.className = 'but';}, 300);
+		window.setTimeout(function() {elt.className = 'butGrayed';}, 300);
 		return;
 	}
 	for (iCol = 0; iCol < 10; iCol++) {
@@ -1614,8 +1726,25 @@ function dealRow() {
 		cols[iCol].respace();
 	}
 	showDealt();
-	resetUndo();	// block undo because some cards where unhidden 
-	presentSituation = mkStringGame();
+	oUndo.clear();	// block undo because some cards where unhidden 
+	oUndo.savePresentSituation(mkStringGame());
+	if (deck.cards.length == 0) disableDealtButton();
+}
+
+//-----------------------------------------------------------------------------
+// gray undo button
+//-----------------------------------------------------------------------------
+function disableDealtButton() {
+	var elt = document.getElementById('deal');
+	elt.className = 'butGrayed';
+}
+
+//-----------------------------------------------------------------------------
+// Set button to active color undo button
+//-----------------------------------------------------------------------------
+function enableDealtButton() {
+	var elt = document.getElementById('deal');
+	elt.className = 'but';
 }
 
 //-----------------------------------------------------------------------------
@@ -1733,7 +1862,7 @@ Number.prototype.toHHMMSS = function () {
 	return hours+':'+minutes+':'+seconds;
 }
 //-----------------------------------------------------------------------------
-// display ellapsed time for this game
+// display elapsed time for this game
 // called every second (timer)
 //-----------------------------------------------------------------------------
 function showElapsed() {
@@ -1765,14 +1894,14 @@ function newGame() {
 	showDealt();
 	for (var i = 0; i < finishedSuits.length; i++) finishedSuits[i].style.color = 'transparent';
 	document.getElementById("win").style.display = 'none';
-	killTimerElapsed();
 	timestampStart = +new Date();	// "+" convert date object to timestamp
 	showElapsed();
-	idTimerElapsed = setInterval(showElapsed, 1000);
+	if (!idTimerElapsed) idTimerElapsed = setInterval(showElapsed, 1000);
 	nbMove = 0;
 	showMoves();
-	mkUndo();	// allow to undo across newGame
-	presentSituation = mkStringGame();
+	oUndo.push();	// allow to undo across newGame
+	oUndo.savePresentSituation(mkStringGame());
+	enableDealtButton();
 }
 
 //-----------------------------------------------------------------------------
@@ -1815,7 +1944,7 @@ function mouseDown(ev){
 <div id="moves" class="topinfo">0 move</div>
 <div id="save" class="but" onclick="saveGame()">Save</div>
 <div id="restore" class="but" onclick="restoreGame()">Restore</div>
-<div id="undo" class="but" onclick="undoGame()">Undo</div>
+<div id="undo" class="but" onclick="oUndo.undoGame()">Undo</div>
 <div id="dealt"  class="topinfo"></div>
 <div id="col0" class="column"></div>
 <div id="col1" class="column"></div>
