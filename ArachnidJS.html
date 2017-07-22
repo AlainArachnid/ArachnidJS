@@ -15,9 +15,7 @@
 
 /******************************************************************************
 * TODO
-* initA : reset nUndo from cookies
 * restore
-* undo and deal row grayed when not possible
 * process Touch events
 * 
 ******************************************************************************/
@@ -915,9 +913,9 @@ Stack.prototype.click = function() {
 	if (s.cards.length == 13) {	// whole suit done
 		var suit = s.cards[0].suit;
 		for (var i = 0; i < finishedSuits.length; i++) {
-			//console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
+			console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
 			if (finishedSuits[i].id.substr(4, 1) != suit) continue;
-			if (finishedSuits[i].style.color != 'transparent') continue;
+			if (finishedSuits[i].style.color == 'red' || finishedSuits[i].style.color == 'black') continue;
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
 			this.moveStraight(s);	// remove from the desk
 			if (!this.unhideLast()) oUndo.push();
@@ -927,7 +925,7 @@ Stack.prototype.click = function() {
 			if (checkWinGreat()) return;
 			// check if win (lesser mode)
 			for (var i = 0; i < finishedSuits.length; i++) {
-				if (finishedSuits[i].style.color == 'transparent') return;
+				if (!(finishedSuits[i].style.color == 'red' || finishedSuits[i].style.color == 'black')) return;
 			}
 			win();
 			return;
@@ -1206,12 +1204,14 @@ function classUndo() {
 	// reload from storage, set color of undo button
 	if (window.localStorage) {
 		this.presentSituation = window.localStorage.getItem('ArachnidJSPresent');
-		console.log('classUndo, localStorage.length=' + localStorage.length);
+		console.log('classUndo, new, localStorage.length=' + localStorage.length);
 		for (var i = 0, len = localStorage.length; i < len; ++i ) {
-			console.log('classUndo, key[' + i + ']=' + localStorage.key(i));
-			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') continue;
+			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') {
+				console.log('classUndo, new, key[' + i + ']=' + localStorage.key(i));
+				continue;
+			}
 			var n = parseInt(localStorage.key(i).substr(14));
-			console.log('classUndo, n=' + n);
+			console.log('classUndo, new, key[' + i + ']=' + localStorage.key(i) + ', nUndo=' + n);
 			if (!isNaN(n)) this.undoBuffer[n] = window.localStorage.getItem(localStorage.key(i));
 		}
 	} else {
@@ -1230,6 +1230,16 @@ function classUndo() {
 	}
 	if (this.undoBuffer.length > 0) this.enableButton();
 	else                            this.disableButton();
+	this.logDebug('new');
+}
+
+//-----------------------------------------------------------------------------
+// debug into console
+//-----------------------------------------------------------------------------
+classUndo.prototype.logDebug = function(sMsg) {
+	console.log('classUndo, ' + sMsg + ', undoBuffer.length=' + this.undoBuffer.length + ', presentSituation=' + this.presentSituation);
+	for (var i = 0; i < this.undoBuffer.length; i++)
+		console.log('classUndo, undoBuffer[' + i + ']=' + this.undoBuffer[i]);
 }
 
 //-----------------------------------------------------------------------------
@@ -1249,6 +1259,7 @@ classUndo.prototype.push = function() {
 	}
 	//this.nbUndo++;
 	this.enableButton();
+	this.logDebug('push');
 }
 
 //-----------------------------------------------------------------------------
@@ -1270,7 +1281,8 @@ classUndo.prototype.savePresentSituation = function(sSituation) {
 classUndo.prototype.clear = function() {
 	this.undoBuffer.length = 0;
 	if (window.localStorage) {
-		for (var i = 0, len = localStorage.length; i < len; ++i ) {
+		for (var i = localStorage.length-1; i >= 0; i--) {	// always backwards when we remove items
+			//console.log('classUndo.clear, localStorage.length=' + localStorage.length + ', i=' + i);
 			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') continue;
 			localStorage.removeItem(localStorage.key(i));
 		}
@@ -1294,13 +1306,6 @@ classUndo.prototype.undoGame = function() {
 		this.flashButton();
 		return;
 	}
-	/*
-	var sName = 'ArachnidJSundo' + (nbUndo - 1);
-	if (!reloadGame(getCookie(sName))) {
-		flashButton();
-		return;
-	}
-	*/
 	var nb = this.undoBuffer.length - 1;
 	if (!reloadGame(this.undoBuffer[nb])) {
 		this.flashButton();
@@ -1314,6 +1319,7 @@ classUndo.prototype.undoGame = function() {
 		document.cookie = 'ArachnidJSundo' + nb + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'; 
 	}
 	if (nb == 0) this.disableButton();
+	showDealt();
 	//console.log('End undoGame, nbUndo=' + nbUndo + ', sName=' + sName);
 }
 
@@ -1486,6 +1492,28 @@ function buildCardArray(s) {
 }
 
 //-----------------------------------------------------------------------------
+// Log game situation into console
+//-----------------------------------------------------------------------------
+function logDebugGame(sMsg) {
+	var s = '';
+	for (var iCol = 0; iCol < 10; iCol++) {
+		var nHidden = 0; nVisible = 0, inVisible = false, oCol = cols[iCol];
+		for (var iCard = 0; iCard < oCol.cards.length; iCard++) {
+			var oCard = oCol.cards[iCard];
+			if (oCard.visible) {
+				inVisible = true;
+				nVisible++;
+			} else {
+				if (inVisible) console.log('******** error, column ' + iCol + ', card ' + oCard.cardToString() + ' hidden after visible card');
+				nHidden++;
+			}
+		}
+		s += '(' + nHidden + ' ' + nVisible +') ';
+	}
+	console.log('Game ' + sMsg + ' ' + s + ' deck=' + deck.cards.length);
+}
+
+//-----------------------------------------------------------------------------
 // Reload game from undo buffer (return false if error)
 //-----------------------------------------------------------------------------
 function reloadGame(sSave) {
@@ -1514,12 +1542,51 @@ function reloadGame(sSave) {
 		}
 	}
 	// deck
+	deck.cards =  buildCardArray(tabSave[20]);
 	// number of moves
 	nbMove = Math.round(tabSave[21]);
 	showMoves();
 	// timestamp of game start
 	timestampStart = Math.round(tabSave[22]);
 	showElapsed();
+	// whole suits & check coherence
+	var nCards = new Array(0, 0, 0, 0);
+	for (var iCol = 0; iCol < 11; iCol++) {
+		var oCol;
+		if (iCol == 10) oCol = deck;
+		else            oCol = cols[iCol];
+		for (var iCard = 0, len=oCol.cards.length; iCard < len; iCard++) {
+			switch (oCol.cards[iCard].suit) {
+				case 'C': nCards[0]++; break;
+				case 'D': nCards[1]++; break;
+				case 'H': nCards[2]++; break;
+				case 'S': nCards[3]++; break;
+			}
+		}
+	}
+	for (var iSuit = 0; iSuit < 4; iSuit++) {
+		var e1 = finishedSuits[iSuit * 2];
+		var e2 = finishedSuits[iSuit * 2 + 1];
+		var sColor = (iSuit == 1 || iSuit == 2) ? 'red' : 'black';
+		switch (nCards[iSuit]) {
+			case 26:
+				e1.style.color = 'transparent';
+				e2.style.color = 'transparent';
+				break;
+			case 13:
+				e1.style.color = sColor;
+				e2.style.color = 'transparent';
+				break;
+			case 0:
+				e1.style.color = sColor;
+				e2.style.color = sColor;
+				break;
+			default:
+				console.log('**************reloadGame, internal error, nCards=' + nCards[iSuit] + ' for Suit ' + 'CDHS'.substr(iSuit, 1));
+				return;
+		}
+	}
+	// need to save Present
 	oUndo.savePresentSituation(mkStringGame());
 	return true;
 }
@@ -1694,6 +1761,8 @@ function initA() {
 	// reload current (before browser was halted or before F5) or initialize new game
 	if (oUndo.reloadPresent()) {
 		idTimerElapsed = setInterval(showElapsed, 1000);
+		showDealt();
+		logDebugGame('initA');
 	} else {
 		newGame();
 	}
@@ -1728,7 +1797,6 @@ function dealRow() {
 	showDealt();
 	oUndo.clear();	// block undo because some cards where unhidden 
 	oUndo.savePresentSituation(mkStringGame());
-	if (deck.cards.length == 0) disableDealtButton();
 }
 
 //-----------------------------------------------------------------------------
@@ -1751,7 +1819,10 @@ function enableDealtButton() {
 // display the count of already dealt
 //-----------------------------------------------------------------------------
 function showDealt() {
-	document.getElementById('dealt').innerHTML = (5 - (deck.cardCount()/10)) + '/5';
+	var nLeft = deck.cardCount()/10;
+	document.getElementById('dealt').innerHTML = (5-nLeft) + '/5';
+	if (nLeft <= 0) disableDealtButton();
+	else        enableDealtButton();
 }
 
 //-----------------------------------------------------------------------------
