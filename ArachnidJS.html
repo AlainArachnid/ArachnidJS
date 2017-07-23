@@ -36,6 +36,9 @@ html, body {
 	position: absolute;
 	overflow-y: hidden;	/* avoid vertical scroll. Long columns are compressed */
 	overflow-x: hidden;	/* avoid horizontal scroll */
+	-webkit-touch-callout: none;	/* help something on iPhone */
+	touch-action: none;	/* prevent the default touch for edge and IE on touch devices */
+	-ms-touch-action: none;
 }
 
 #log {
@@ -1757,6 +1760,12 @@ function initA() {
 	document.onmousemove = mouseMove;
 	document.onmousedown = mouseDown;
 	document.onmouseup   = mouseUp;
+	initTouchHandler();
+	/*
+	document.ontouchmove = mouseMove;
+	document.ontouchend = mouseDown;
+	document.ontouchstart   = mouseUp;
+	*/
 	// viewport resize
 	window.onresize = windowResize;
 	window.orientationChange = windowResize;
@@ -1777,6 +1786,46 @@ function initA() {
 	} else {
 		newGame();
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Simulate mouse on smartphone/tablet
+// we simulate a *right* click to be able to split same suit straights
+// https://stackoverflow.com/questions/1517924/javascript-mapping-touch-events-to-mouse-events
+//-----------------------------------------------------------------------------
+function touchHandler(event)
+{
+	var touches = event.changedTouches,
+		first = touches[0],
+		type = "";
+	switch(event.type)
+	{
+		case "touchstart": type = "mousedown"; break;
+		case "touchmove":  type = "mousemove"; break;        
+		case "touchend":   type = "mouseup";   break;
+		default:           return;
+	}
+
+	// initMouseEvent(type, canBubble, cancelable, view, clickCount, 
+	//                screenX, screenY, clientX, clientY, ctrlKey, 
+	//                altKey, shiftKey, metaKey, button, relatedTarget);
+
+	var simulatedEvent = document.createEvent("MouseEvent");
+	simulatedEvent.initMouseEvent(type, true, true, window, 1, 
+								  first.screenX, first.screenY, 
+								  first.clientX, first.clientY, false, 
+								  false, false, false, 2/*right*/, null);
+
+	first.target.dispatchEvent(simulatedEvent);
+	if (event.type == 'touchmove') event.preventDefault();
+	}
+
+function initTouchHandler() 
+	{
+	document.addEventListener("touchstart", touchHandler, true);
+	document.addEventListener("touchmove", touchHandler, true);
+	document.addEventListener("touchend", touchHandler, true);
+	document.addEventListener("touchcancel", touchHandler, true);    
 }
 
 //-----------------------------------------------------------------------------
