@@ -34,7 +34,7 @@ html, body {
 	width:1040px;
 	background-color:green;
 	position: absolute;
-	overflow-y: auto;	/* allow background to expand as much as needed for very long columns */
+	overflow-y: hidden;	/* avoid vertical scroll. Long columns are compressed */
 	overflow-x: hidden;	/* avoid horizontal scroll */
 }
 
@@ -223,8 +223,9 @@ html, body {
 .ace {
 	font-size: 300%;
 	position: absolute;
-	left: 0.325em;
-	top:  0.250em;
+	width: 100%;
+	text-align: center;
+	top:  0.200em;
 }
 
 .face {
@@ -913,7 +914,7 @@ Stack.prototype.click = function() {
 	if (s.cards.length == 13) {	// whole suit done
 		var suit = s.cards[0].suit;
 		for (var i = 0; i < finishedSuits.length; i++) {
-			console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
+			//console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
 			if (finishedSuits[i].id.substr(4, 1) != suit) continue;
 			if (finishedSuits[i].style.color == 'red' || finishedSuits[i].style.color == 'black') continue;
 			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
@@ -1202,30 +1203,34 @@ DragDrop.prototype.moveTo = function(pos) {
 function classUndo() {
 	this.undoBuffer = new Array();
 	// reload from storage, set color of undo button
-	if (window.localStorage) {
+	if (useLocalStorage) {
 		this.presentSituation = window.localStorage.getItem('ArachnidJSPresent');
-		console.log('classUndo, new, localStorage.length=' + localStorage.length);
+		//console.log('classUndo, new, localStorage.length=' + localStorage.length);
 		for (var i = 0, len = localStorage.length; i < len; ++i ) {
 			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') {
-				console.log('classUndo, new, key[' + i + ']=' + localStorage.key(i));
+				//console.log('classUndo, new, localStorage, key[' + i + ']=' + localStorage.key(i));
 				continue;
 			}
 			var n = parseInt(localStorage.key(i).substr(14));
-			console.log('classUndo, new, key[' + i + ']=' + localStorage.key(i) + ', nUndo=' + n);
+			//console.log('classUndo, new, localStorage, key[' + i + ']=' + localStorage.key(i) + ', nUndo=' + n);
 			if (!isNaN(n)) this.undoBuffer[n] = window.localStorage.getItem(localStorage.key(i));
 		}
 	} else {
 		// fall back to cookies
+		//document.getElementById('log').firstChild.textContent = document.cookie;
+		var oUndo = this;	// need a local variable, unable to access [this] in the (forEach) function
 		document.cookie.split(";").forEach(function(c) {
+			//console.log('classUndo, new, cookies, c=' + c);
 			c = c.replace(/^ +/, "");
 			if (c.substr(0, 18) == 'ArachnidJSPresent=') {
-				this.presentSituation = c.substr(18);
+				oUndo.presentSituation = c.substr(18);
 				return;
 			}
 			if (c.substr(0, 14) != 'ArachnidJSundo') return;
 			var m = c.match(/^ArachnidJSundo(\d*)=(.*)$/);
 			if (!m) return;
-			this.undoBuffer[parseInt(m[0])] = m[1];
+			var n = parseInt(m[1]);
+			if (!isNaN(n)) oUndo.undoBuffer[n] = m[2];
 			});
 	}
 	if (this.undoBuffer.length > 0) this.enableButton();
@@ -1247,17 +1252,15 @@ classUndo.prototype.logDebug = function(sMsg) {
 //-----------------------------------------------------------------------------
 classUndo.prototype.push = function() {
 	if (!this.presentSituation) return
-	//document.cookie = 'ArachnidJSundo' + nbUndo + '=' + presentSituation + ';path=/';
 	//document.getElementById('log').firstChild.textContent = document.cookie;
 	var nb = this.undoBuffer.length;
 	this.undoBuffer.push(this.presentSituation);
-	if (window.localStorage) {
+	if (useLocalStorage) {
 		window.localStorage.setItem('ArachnidJSundo' +nb, this.presentSituation);
 	} else {
 		// fall back to cookies
-		document.cookie = 'ArachnidJSundo' + nb + '=' + this.presentSituation;
+		document.cookie = 'ArachnidJSundo' + nb + '=' + this.presentSituation + ';path=/';
 	}
-	//this.nbUndo++;
 	this.enableButton();
 	this.logDebug('push');
 }
@@ -1267,7 +1270,7 @@ classUndo.prototype.push = function() {
 //-----------------------------------------------------------------------------
 classUndo.prototype.savePresentSituation = function(sSituation) {
 	this.presentSituation = sSituation;
-	if (window.localStorage) {
+	if (useLocalStorage) {
 		window.localStorage.setItem('ArachnidJSPresent', sSituation);
 	} else {
 		// fall back to cookies
@@ -1280,7 +1283,7 @@ classUndo.prototype.savePresentSituation = function(sSituation) {
 //-----------------------------------------------------------------------------
 classUndo.prototype.clear = function() {
 	this.undoBuffer.length = 0;
-	if (window.localStorage) {
+	if (useLocalStorage) {
 		for (var i = localStorage.length-1; i >= 0; i--) {	// always backwards when we remove items
 			//console.log('classUndo.clear, localStorage.length=' + localStorage.length + ', i=' + i);
 			if (localStorage.key(i).substr(0, 14) != 'ArachnidJSundo') continue;
@@ -1291,7 +1294,7 @@ classUndo.prototype.clear = function() {
 		document.cookie.split(";").forEach(function(c) {
 			c = c.replace(/^ +/, "");
 			if (c.substr(0, 14) != 'ArachnidJSundo') return;	// don't mess up other cookies
-			document.cookie = c.replace(/=.*/, "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"); 
+			eraseCookieFromAllPaths(c.replace(/=.*$/, ''));
 			});
 	}
 	this.disableButton();
@@ -1312,11 +1315,11 @@ classUndo.prototype.undoGame = function() {
 		return;
 	}
 	this.undoBuffer.length = nb;	// truncate the array
-	if (window.localStorage) {
+	if (useLocalStorage) {
 		localStorage.removeItem('ArachnidJSundo' + nb);
 	} else {
 		// fall back to cookies
-		document.cookie = 'ArachnidJSundo' + nb + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'; 
+		eraseCookieFromAllPaths('ArachnidJSundo' + nb); 
 	}
 	if (nb == 0) this.disableButton();
 	showDealt();
@@ -1372,7 +1375,8 @@ var finishedSuits = [];	// DIVs where to show finished suits
 var timestampStart;			// used to display elapsed time
 var idTimerElapsed;			// used to display elapsed time
 var nbMove;					// used to display number of moves for this game
-var oUndo;	// undo object
+var oUndo;					// undo object
+var useLocalStorage;		// because Edge, need to store if localStorage is available or not
 
 //-----------------------------------------------------------------------------
 // global constants
@@ -1592,11 +1596,25 @@ function reloadGame(sSave) {
 }
 
 //-----------------------------------------------------------------------------
-// Restore current situation
-// return true if OK, false if unable to undo
+// Reload from a file
 //-----------------------------------------------------------------------------
 function restoreGame() {
 	alert('Sorry, not yet');
+	return;
+/*	
+	if (window.clipboardData && window.clipboardData.getData) {
+		var sRestore = window.clipboardData.getData('Text');
+	}
+		if (sRestore.substr(0, 11) != 'ArachnidJS ') {
+			alert('Copy the saved game into the clipboard');
+			return;
+		}
+		if (!reloadGame(sRestore.substr(11))) {
+			alert('unable to reload game');
+			return;
+		}
+	}
+*/
 }
 
 //-----------------------------------------------------------------------------
@@ -1744,18 +1762,11 @@ function initA() {
 	window.orientationChange = windowResize;
 	// debug right click
 	//document.body.oncontextmenu = function(ev) {ev = ev || window.event; target = ev.target || ev.srcElement; console.log('debugRightClick ev.target' + ev.target.id);};
-	
-	/*
-	// update nbUndo according to the cookies (derived from https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript)
-	console.log('InitA, cookies=' + document.cookie);
-	document.cookie.split(";").forEach(function(c) {
-		c = c.replace(/^ +/, "");
-		if (c.substr(0, 14) != 'ArachnidJSundo') return;
-		c = c.replace(/=.*$/, "");
-		var i = parseInt(c.substr(14));
-		if (i >= nbUndo) nbUndo = i+1;
-		});
-	*/
+	// use LocalStorage or not
+	try {	// the following line throws an exception with Edge on a local file
+		if (window.localStorage) useLocalStorage = true;
+	} catch (e) {
+	}
 	// initialize undo mechanism
 	oUndo = new classUndo();
 	// reload current (before browser was halted or before F5) or initialize new game
@@ -1919,6 +1930,23 @@ function showMoves() {
 }
 
 //-----------------------------------------------------------------------------
+// clear cookie (doing it for each path was necessary in IE11, local file)
+// https://stackoverflow.com/questions/179355/clearing-all-cookies-with-javascript
+//-----------------------------------------------------------------------------
+function eraseCookieFromAllPaths(name) {
+	var pathBits = location.pathname.split('/');
+	var pathCurrent = ' path=';
+
+	// do a simple pathless delete first.
+	document.cookie = name + '=; expires=Thu, 01-Jan-1970 00:00:01 GMT;';
+
+	for (var i = 0; i < pathBits.length; i++) {
+		pathCurrent += ((pathCurrent.substr(-1) != '/') ? '/' : '') + pathBits[i];
+		document.cookie = name + '=; expires=Thu, 01-Jan-1970 00:00:01 GMT;' + pathCurrent + ';';
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Convert a timestamp into hh:mm:ss
 //-----------------------------------------------------------------------------
 Number.prototype.toHHMMSS = function () {
@@ -1932,6 +1960,7 @@ Number.prototype.toHHMMSS = function () {
 	if (seconds < 10) {seconds = "0"+seconds;}
 	return hours+':'+minutes+':'+seconds;
 }
+
 //-----------------------------------------------------------------------------
 // display elapsed time for this game
 // called every second (timer)
@@ -2027,14 +2056,14 @@ function mouseDown(ev){
 <div id="col7" class="column"></div>
 <div id="col8" class="column"></div>
 <div id="col9" class="column"></div>
-<div id="suitC1", class="terminatedSuit">♣</div>
-<div id="suitC2", class="terminatedSuit">♣</div>
-<div id="suitD1", class="terminatedSuit red">♦</div>
-<div id="suitD2", class="terminatedSuit red">♦</div>
-<div id="suitH1", class="terminatedSuit red">♥</div>
-<div id="suitH2", class="terminatedSuit red">♥</div>
-<div id="suitS1", class="terminatedSuit">♠</div>
-<div id="suitS2", class="terminatedSuit">♠</div>
+<div id="suitC1" class="terminatedSuit">♣</div>
+<div id="suitC2" class="terminatedSuit">♣</div>
+<div id="suitD1" class="terminatedSuit red">♦</div>
+<div id="suitD2" class="terminatedSuit red">♦</div>
+<div id="suitH1" class="terminatedSuit red">♥</div>
+<div id="suitH2" class="terminatedSuit red">♥</div>
+<div id="suitS1" class="terminatedSuit">♠</div>
+<div id="suitS2" class="terminatedSuit">♠</div>
 <div id="win" >x</div>
 </div>
 </body>
