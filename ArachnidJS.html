@@ -3,6 +3,7 @@
 <head>
 	<title>Arachnid</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<!-- icon extracted from the historical 16 bits arachnid.exe -->
 	<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAICAQAAEABADoAgAAFgAAACgAAAAgAAAAQAAAAAEABAAAAAAAgAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACAAAAAgIAAgAAAAIAAgACAgAAAgICAAMDAwAAAAP8AAP8AAAD//wD/AAAA/wD/AP//AAD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////AAAAAAAAAAAAD//////5nwAAAAAAAAAAAA//////+Z8AAAAAAAAAAAAP///5//mfAAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA//+ZmZ//8AAAAAAAAAAAAP//+Zn///AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA///5mf//8AAAAAAAAAAAAP//mZmf//AAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA+Z//n///8AAAAAAAAAAAAPmf//////AAAAAAAAAAAAD5n//////wAAAAAAAAAAAA////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//////////////////////4AA//+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP///////////wAAAAAAAAAAAADC3G9ouH8AAMrcb2i4fwAAAAAAAAEBAAAwAwAAAAA=" />
 	<style type="text/css">
 /******************************************************************************
@@ -964,7 +965,7 @@ Stack.prototype.dropStraight = function(oStraight) {
 		//console.log('drop ' + myCard.cardToString() + ' to ' + this.elt.id);
 		this.addCard(myCard);
 	}
-	this.respace();
+	this.respace(true);	// need to force respace because the spacing don't change but cards have moved
 }
 
 //-----------------------------------------------------------------------------
@@ -1015,7 +1016,7 @@ Stack.prototype.flashAll = function() {
 //-----------------------------------------------------------------------------
 // Recompute vertical spacing if needed
 //-----------------------------------------------------------------------------
-Stack.prototype.respace = function() {
+Stack.prototype.respace = function(bForce) {
 	var nbCard = this.cards.length;
 	//console.log('respace, nbCard=' + nbCard);
 	if (nbCard <= 1) return;	// nothing to do if 0 or 1 card (no spacing)
@@ -1034,7 +1035,7 @@ Stack.prototype.respace = function() {
 		/ (nbCard-1);	// divided by number of spacing
 	//console.log('respace, h=' + h + ', rect.top=' + rect.top + ', newSpacing=' + newSpacing);
 	if (newSpacing > 40) newSpacing = 40;
-	if (newSpacing != this.spacing) {
+	if (bForce || newSpacing != this.spacing) {
 		this.spacing = newSpacing;
 		// redraw cards
 		for (var iPos = 1; iPos < nbCard; iPos++) this.cards[iPos].elt.style.top = (iPos * newSpacing) + 'px';
@@ -1327,6 +1328,7 @@ classUndo.prototype.undoGame = function() {
 	}
 	if (nb == 0) this.disableButton();
 	showDealt();
+	windowResize();	// compress columns as needed
 	//console.log('End undoGame, nbUndo=' + nbUndo + ', sName=' + sName);
 }
 
@@ -1787,6 +1789,8 @@ function initA() {
 	} else {
 		newGame();
 	}
+	// col compression if needed
+	windowResize();
 }
 
 //-----------------------------------------------------------------------------
@@ -1802,7 +1806,7 @@ function touchHandler(event)
 	switch(event.type)
 	{
 		case "touchstart": type = "mousedown"; break;
-		case "touchmove":  type = "mousemove"; break;        
+		case "touchmove":  type = "mousemove"; break;
 		case "touchend":   type = "mouseup";   break;
 		default:           return;
 	}
