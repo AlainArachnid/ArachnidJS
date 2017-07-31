@@ -3,7 +3,7 @@
 <head>
 	<title>Arachnid</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-	<!-- icon extracted from the historical 16 bits arachnid.exe -->
+	<!-- icon extracted from the legacy 16 bits arachnid.exe -->
 	<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAICAQAAEABADoAgAAFgAAACgAAAAgAAAAQAAAAAEABAAAAAAAgAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACAAAAAgIAAgAAAAIAAgACAgAAAgICAAMDAwAAAAP8AAP8AAAD//wD/AAAA/wD/AP//AAD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////AAAAAAAAAAAAD//////5nwAAAAAAAAAAAA//////+Z8AAAAAAAAAAAAP///5//mfAAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA//+ZmZ//8AAAAAAAAAAAAP//+Zn///AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA///5mf//8AAAAAAAAAAAAP//mZmf//AAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA+Z//n///8AAAAAAAAAAAAPmf//////AAAAAAAAAAAAD5n//////wAAAAAAAAAAAA////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//////////////////////4AA//+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP///////////wAAAAAAAAAAAADC3G9ouH8AAMrcb2i4fwAAAAAAAAEBAAAwAwAAAAA=" />
 	<style type="text/css">
 /******************************************************************************
@@ -18,7 +18,6 @@
 /******************************************************************************
 * TODO
 * restore
-* process Touch events
 * 
 ******************************************************************************/
 
@@ -1383,6 +1382,7 @@ var idTimerElapsed;			// used to display elapsed time
 var nbMove;					// used to display number of moves for this game
 var oUndo;					// undo object
 var useLocalStorage;		// because Edge, need to store if localStorage is available or not
+var useFileReader;			// able to restore from file or not
 
 //-----------------------------------------------------------------------------
 // global constants
@@ -1602,15 +1602,13 @@ function reloadGame(sSave) {
 }
 
 //-----------------------------------------------------------------------------
-// Reload from a file
+// Reload button was pressed
 //-----------------------------------------------------------------------------
-function restoreGame() {
-	alert('Sorry, not yet');
+function restoreButton() {
+	alert('Drag and drop the file into the game');
 	return;
-/*	
 	if (window.clipboardData && window.clipboardData.getData) {
 		var sRestore = window.clipboardData.getData('Text');
-	}
 		if (sRestore.substr(0, 11) != 'ArachnidJS ') {
 			alert('Copy the saved game into the clipboard');
 			return;
@@ -1619,8 +1617,40 @@ function restoreGame() {
 			alert('unable to reload game');
 			return;
 		}
+		return;
 	}
-*/
+	alert('Browser not compliant');
+}
+
+//-----------------------------------------------------------------------------
+// Check validity of saved game, return the saveGame string
+//-----------------------------------------------------------------------------
+function checkGame(sGame) {
+	var t = sGame.split(/ /);
+	if (t.length != 25) return;
+	if (t[0] != 'ArachnidJS') return;
+	sMD5 = t[24];
+	t = t.slice(1, 24);
+	var s = t.join(' ');
+	// check MD5
+	if (MD5(s + ' ') != sMD5) return;
+	return s;
+}
+
+//-----------------------------------------------------------------------------
+// Reload from a string the user may have cheated
+//-----------------------------------------------------------------------------
+function restoreGame(sGame) {
+	var s = checkGame(sGame);
+	if (!s) {
+		alert('This is not a valid Arachnid game');
+		return;
+	}
+	// actual reloading
+	oUndo.push();
+	if (reloadGame(s)) return;
+	oUndo.undoGame();
+	alert('Unable to restore this game');
 }
 
 //-----------------------------------------------------------------------------
@@ -1764,11 +1794,6 @@ function initA() {
 	document.onmousedown = mouseDown;
 	document.onmouseup   = mouseUp;
 	initTouchHandler();
-	/*
-	document.ontouchmove = mouseMove;
-	document.ontouchend = mouseDown;
-	document.ontouchstart   = mouseUp;
-	*/
 	// viewport resize
 	window.onresize = windowResize;
 	window.orientationChange = windowResize;
@@ -1778,6 +1803,17 @@ function initA() {
 	try {	// the following line throws an exception with Edge on a local file
 		if (window.localStorage) useLocalStorage = true;
 	} catch (e) {
+	}
+	// able to restore (from file) or not
+	try {	// the following line throws an exception with Edge on a local file
+		var xx = new FileReader();
+		useFileReader = true;
+	} catch (e) {
+	}
+	if (useFileReader) {	// prepare drag'n drop file
+		var dropZone = document.getElementById('bkground');
+		dropZone.addEventListener('dragover', handleDragOver, false);
+		dropZone.addEventListener('drop', handleFileSelect, false);
 	}
 	// initialize undo mechanism
 	oUndo = new classUndo();
@@ -1791,6 +1827,34 @@ function initA() {
 	}
 	// col compression if needed
 	windowResize();
+}
+
+//-----------------------------------------------------------------------------
+// Handle "drop" event when restoring a game
+//-----------------------------------------------------------------------------
+function handleFileSelect(evt) {
+	evt.stopPropagation();
+	evt.preventDefault();
+
+	var files = evt.dataTransfer.files; // FileList object.
+
+	if (files && files[0]) {
+		var reader = new FileReader();
+		reader.onload = function() {
+			console.log('filename=' + files[0].name + ', sGame=' + reader.result);
+			restoreGame(reader.result);
+		}
+		reader.readAsText(files[0]);
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Handle "drag" event when restoring a game
+//-----------------------------------------------------------------------------
+function handleDragOver(evt) {
+	evt.stopPropagation();
+	evt.preventDefault();
+	evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
 }
 
 //-----------------------------------------------------------------------------
@@ -2097,7 +2161,7 @@ function mouseDown(ev){
 <div id="elapsed" class="topinfo">0 s</div>
 <div id="moves" class="topinfo">0 move</div>
 <div id="save" class="but" onclick="saveGame()">Save</div>
-<div id="restore" class="but" onclick="restoreGame()">Restore</div>
+<div id="restore" class="but" onclick="restoreButton()">Restore</div>
 <div id="undo" class="but" onclick="oUndo.undoGame()">Undo</div>
 <div id="dealt"  class="topinfo"></div>
 <div id="col0" class="column"></div>
