@@ -86,6 +86,14 @@ html, body {
 	border-radius: 10px;
 }
 
+#easydiv {
+	position: absolute;
+	color: white;
+	top: 7px;
+	right: 120px;
+	text-align: center;
+}
+
 #save {
 	top: 10px;
 	left: 340px;
@@ -100,7 +108,7 @@ html, body {
 
 #undo {
 	top: 10px;
-	left: 540px;
+	left: 500px;
 	border-radius: 10px;
 }
 
@@ -201,7 +209,7 @@ html, body {
 	position: absolute;
 	color: transparent;
 	font-size: 20pt;
-	top: 11px;
+	top: 10px;
 	border: solid white 1px;
 	width: 20px;
 	text-align: center;
@@ -740,7 +748,12 @@ Stack.prototype.clear = function() {
 //-----------------------------------------------------------------------------
 
 Stack.prototype.makeDeck = function(n) {
-	var suits = new Array("C", "D", "H", "S");
+	if (bEasyMode) {
+		var suits = new Array("H", "S");
+		n *= 2;
+	} else {
+		var suits = new Array("C", "D", "H", "S");
+	}
 	var i, j, k;
 	var m;
 
@@ -910,12 +923,15 @@ Stack.prototype.click = function() {
 			if (!this.unhideLast()) oUndo.push();
 			incMove();
 			oUndo.savePresentSituation(mkStringGame());
-			// check if win (greater mode, all suits complete and on the desk)
-			if (checkWinGreat()) return;
+			if (checkWin()) return;
 			return;
 		}
 	}
 	if (s.cards.length == 13) {	// whole suit done
+		this.moveStraight(s);	// remove from the desk
+		oFinishedSuits.update();
+		return;
+		/* to be deleted
 		var suit = s.cards[0].suit;
 		for (var i = 0; i < finishedSuits.length; i++) {
 			//console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
@@ -926,15 +942,9 @@ Stack.prototype.click = function() {
 			if (!this.unhideLast()) oUndo.push();
 			incMove();
 			oUndo.savePresentSituation(mkStringGame());
-			// check if win (greater mode, all suit complete and on the desk)
-			if (checkWinGreat()) return;
-			// check if win (lesser mode)
-			for (var i = 0; i < finishedSuits.length; i++) {
-				if (!(finishedSuits[i].style.color == 'red' || finishedSuits[i].style.color == 'black')) return;
-			}
-			win();
 			return;
 		}
+		*/
 	}
 	s.flashAll();	// tell player there was no suitable destination
 }
@@ -1239,7 +1249,7 @@ function classUndo() {
 	}
 	if (this.undoBuffer.length > 0) this.enableButton();
 	else                            this.disableButton();
-	this.logDebug('new');
+	//this.logDebug('new');
 }
 
 //-----------------------------------------------------------------------------
@@ -1266,7 +1276,7 @@ classUndo.prototype.push = function() {
 		document.cookie = 'ArachnidJSundo' + nb + '=' + this.presentSituation + ';path=/';
 	}
 	this.enableButton();
-	this.logDebug('push');
+	//this.logDebug('push');
 }
 
 //-----------------------------------------------------------------------------
@@ -1367,6 +1377,75 @@ classUndo.prototype.reloadPresent = function() {
 }
 
 //=============================================================================
+// classFinishedSuits Object
+// local variables:
+//	tabFinishedSuits	divs for the finished suits
+//	rightSuits			from right of background to right of right completed suit
+//	spacingSuits		from right of a suit to right of the following suit
+//=============================================================================
+//-----------------------------------------------------------------------------
+// undo : initialize and load from local storage
+//-----------------------------------------------------------------------------
+function classFinishedSuits() {
+	this.rightSuits = 170;
+	this.spacingSuits = 35;
+	this.tabFinishedSuits = [];
+	for (var j = 0; j < 8; j++) {
+		var e = document.getElementById('suit' + j);
+		e.style.right = (this.rightSuits + j * this.spacingSuits) + 'px';
+		this.tabFinishedSuits.push(e);
+	}
+}
+
+//-----------------------------------------------------------------------------
+// show finished suits
+//		+ check coherence : return error string if not OK
+//-----------------------------------------------------------------------------
+classFinishedSuits.prototype.update = function() {
+	var nCards = new Array(0, 0, 0, 0);
+	for (var iCol = 0; iCol < 11; iCol++) {
+		var oCol;
+		if (iCol == 10) oCol = deck;
+		else            oCol = cols[iCol];
+		for (var iCard = 0, len = oCol.cards.length; iCard < len; iCard++) {
+			switch (oCol.cards[iCard].suit) {
+				case 'H': nCards[0]++; break;
+				case 'S': nCards[1]++; break;
+				case 'C': nCards[2]++; break;
+				case 'D': nCards[3]++; break;
+				default:
+					return 'bad suit: ' + oCol.cards[iCard].suit;
+			}
+		}
+	}
+	for (var iSuit = 0; iSuit < 4; iSuit++) {
+		if (bEasyMode) {
+			var tabElt = new Array(this.tabFinishedSuits[iSuit * 4],
+								this.tabFinishedSuits[iSuit * 4 + 1],
+								this.tabFinishedSuits[iSuit * 4 + 2],
+								this.tabFinishedSuits[iSuit * 4 + 3]);
+			var sColor = iSuit ? 'black' : 'red';
+			var maxAllowed = iSuit > 1 ? 0 : 52;
+		} else {
+			var tabElt = new Array(this.tabFinishedSuits[iSuit * 2],
+								this.tabFinishedSuits[iSuit * 2 + 1]);
+			var sColor = (iSuit == 1 || iSuit == 2) ? 'red' : 'black';
+			var maxAllowed = 26;
+		}
+		if (nCards[iSuit] > maxAllowed) return 'nCards=' + nCards[iSuit] + ' for Suit ' + 'HSCD'.substr(iSuit, 1);
+		// must have a full number of suits
+		if ((nCards[iSuit] % 13) != 0) return 'nCards=' + nCards[iSuit] + ' for Suit ' + 'HSCD'.substr(iSuit, 1);
+		if (maxAllowed == 0) continue;
+		// show finished Suits
+		var nNotFinishedSuits = nCards[iSuit] / 13;
+		for (var i = 0, l = tabElt.length; i < l; i++) {
+			tabElt[i].style.color = i < nNotFinishedSuits ? 'transparent' : sColor;
+			tabElt[i].firstChild.textContent = '♥♠♣♦'.substr(iSuit, 1);
+		}
+	}
+}
+
+//=============================================================================
 // End of objects
 //=============================================================================
 
@@ -1376,21 +1455,20 @@ classUndo.prototype.reloadPresent = function() {
 var deck;	// cards remaining to be dealt
 var cols;	// 10 columns
 var ddrop;	// dragDrop object, undefined when there is no active drag'n drop
-var finishedSuits = [];	// DIVs where to show finished suits
+var oFinishedSuits;			// manage where to show finished suits
 var timestampStart;			// used to display elapsed time
 var idTimerElapsed;			// used to display elapsed time
 var nbMove;					// used to display number of moves for this game
 var oUndo;					// undo object
 var useLocalStorage;		// because Edge, need to store if localStorage is available or not
 var useFileReader;			// able to restore from file or not
+var bEasyMode;				// use 4 times Hearth & Spades instead of 2 times each suit
 
 //-----------------------------------------------------------------------------
 // global constants
 //-----------------------------------------------------------------------------
 var leftMargin = 10;		// from left of background to left of first column
 var columnSpacing = 102;	// from left of a column to left of next column
-var rightSuits = 100;		// from right of background to right of right completed suit
-var spacingSuits = 35;		// from right of a suit to right of the following suit
 
 //-----------------------------------------------------------------------------
 // Build a string containing the current situation
@@ -1403,7 +1481,7 @@ function mkStringGame() {
 	// column1, showed cards
 	// column2, 3,... 10
 	// deck
-	// number of moves (a number)
+	// number of moves (a number) with a '+' if easyMode
 	// timestamp of game start (a number)
 	var sSave = '';
 	// Columns
@@ -1411,12 +1489,14 @@ function mkStringGame() {
 		sSave += cols[iCol].mkSaveString(true) + ' ';
 	}
 	// deck, nb move, timestamp start
-	sSave += deck.mkSaveString(false) + ' ' + nbMove + ' ' + timestampStart;
+	sSave += deck.mkSaveString(false) + (bEasyMode ? ' +' : ' ') + nbMove + ' ' + timestampStart;
 	//console.log('mkStringGame ' + sSave);
 	return sSave;
 }
 
+//-----------------------------------------------------------------------------
 // http://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript
+//-----------------------------------------------------------------------------
 function copyTextToClipboard(text) {
 	var textArea = document.createElement("textarea");
 	//
@@ -1467,7 +1547,9 @@ function copyTextToClipboard(text) {
 	return successful;
 }
 
+//-----------------------------------------------------------------------------
 // https://stackoverflow.com/questions/14733374/how-to-generate-md5-file-hash-on-javascript
+//-----------------------------------------------------------------------------
 var MD5 = function(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,d,F,H,x;F=(G&2147483648);H=(k&2147483648);I=(G&1073741824);d=(k&1073741824);x=(G&1073741823)+(k&1073741823);if(I&d){return(x^2147483648^F^H)}if(I|d){if(x&1073741824){return(x^3221225472^F^H)}else{return(x^1073741824^F^H)}}else{return(x^F^H)}}function r(d,F,k){return(d&F)|((~d)&k)}function q(d,F,k){return(d&k)|(F&(~k))}function p(d,F,k){return(d^F^k)}function n(d,F,k){return(F^(d|(~k)))}function u(G,F,aa,Z,k,H,I){G=K(G,K(K(r(F,aa,Z),k),I));return K(L(G,H),F)}function f(G,F,aa,Z,k,H,I){G=K(G,K(K(q(F,aa,Z),k),I));return K(L(G,H),F)}function D(G,F,aa,Z,k,H,I){G=K(G,K(K(p(F,aa,Z),k),I));return K(L(G,H),F)}function t(G,F,aa,Z,k,H,I){G=K(G,K(K(n(F,aa,Z),k),I));return K(L(G,H),F)}function e(G){var Z;var F=G.length;var x=F+8;var k=(x-(x%64))/64;var I=(k+1)*16;var aa=Array(I-1);var d=0;var H=0;while(H<F){Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=(aa[Z]| (G.charCodeAt(H)<<d));H++}Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=aa[Z]|(128<<d);aa[I-2]=F<<3;aa[I-1]=F>>>29;return aa}function B(x){var k="",F="",G,d;for(d=0;d<=3;d++){G=(x>>>(d*8))&255;F="0"+G.toString(16);k=k+F.substr(F.length-2,2)}return k}function J(k){k=k.replace(/rn/g,"n");var d="";for(var F=0;F<k.length;F++){var x=k.charCodeAt(F);if(x<128){d+=String.fromCharCode(x)}else{if((x>127)&&(x<2048)){d+=String.fromCharCode((x>>6)|192);d+=String.fromCharCode((x&63)|128)}else{d+=String.fromCharCode((x>>12)|224);d+=String.fromCharCode(((x>>6)&63)|128);d+=String.fromCharCode((x&63)|128)}}}return d}var C=Array();var P,h,E,v,g,Y,X,W,V;var S=7,Q=12,N=17,M=22;var A=5,z=9,y=14,w=20;var o=4,m=11,l=16,j=23;var U=6,T=10,R=15,O=21;s=J(s);C=e(s);Y=1732584193;X=4023233417;W=2562383102;V=271733878;for(P=0;P<C.length;P+=16){h=Y;E=X;v=W;g=V;Y=u(Y,X,W,V,C[P+0],S,3614090360);V=u(V,Y,X,W,C[P+1],Q,3905402710);W=u(W,V,Y,X,C[P+2],N,606105819);X=u(X,W,V,Y,C[P+3],M,3250441966);Y=u(Y,X,W,V,C[P+4],S,4118548399);V=u(V,Y,X,W,C[P+5],Q,1200080426);W=u(W,V,Y,X,C[P+6],N,2821735955);X=u(X,W,V,Y,C[P+7],M,4249261313);Y=u(Y,X,W,V,C[P+8],S,1770035416);V=u(V,Y,X,W,C[P+9],Q,2336552879);W=u(W,V,Y,X,C[P+10],N,4294925233);X=u(X,W,V,Y,C[P+11],M,2304563134);Y=u(Y,X,W,V,C[P+12],S,1804603682);V=u(V,Y,X,W,C[P+13],Q,4254626195);W=u(W,V,Y,X,C[P+14],N,2792965006);X=u(X,W,V,Y,C[P+15],M,1236535329);Y=f(Y,X,W,V,C[P+1],A,4129170786);V=f(V,Y,X,W,C[P+6],z,3225465664);W=f(W,V,Y,X,C[P+11],y,643717713);X=f(X,W,V,Y,C[P+0],w,3921069994);Y=f(Y,X,W,V,C[P+5],A,3593408605);V=f(V,Y,X,W,C[P+10],z,38016083);W=f(W,V,Y,X,C[P+15],y,3634488961);X=f(X,W,V,Y,C[P+4],w,3889429448);Y=f(Y,X,W,V,C[P+9],A,568446438);V=f(V,Y,X,W,C[P+14],z,3275163606);W=f(W,V,Y,X,C[P+3],y,4107603335);X=f(X,W,V,Y,C[P+8],w,1163531501);Y=f(Y,X,W,V,C[P+13],A,2850285829);V=f(V,Y,X,W,C[P+2],z,4243563512);W=f(W,V,Y,X,C[P+7],y,1735328473);X=f(X,W,V,Y,C[P+12],w,2368359562);Y=D(Y,X,W,V,C[P+5],o,4294588738);V=D(V,Y,X,W,C[P+8],m,2272392833);W=D(W,V,Y,X,C[P+11],l,1839030562);X=D(X,W,V,Y,C[P+14],j,4259657740);Y=D(Y,X,W,V,C[P+1],o,2763975236);V=D(V,Y,X,W,C[P+4],m,1272893353);W=D(W,V,Y,X,C[P+7],l,4139469664);X=D(X,W,V,Y,C[P+10],j,3200236656);Y=D(Y,X,W,V,C[P+13],o,681279174);V=D(V,Y,X,W,C[P+0],m,3936430074);W=D(W,V,Y,X,C[P+3],l,3572445317);X=D(X,W,V,Y,C[P+6],j,76029189);Y=D(Y,X,W,V,C[P+9],o,3654602809);V=D(V,Y,X,W,C[P+12],m,3873151461);W=D(W,V,Y,X,C[P+15],l,530742520);X=D(X,W,V,Y,C[P+2],j,3299628645);Y=t(Y,X,W,V,C[P+0],U,4096336452);V=t(V,Y,X,W,C[P+7],T,1126891415);W=t(W,V,Y,X,C[P+14],R,2878612391);X=t(X,W,V,Y,C[P+5],O,4237533241);Y=t(Y,X,W,V,C[P+12],U,1700485571);V=t(V,Y,X,W,C[P+3],T,2399980690);W=t(W,V,Y,X,C[P+10],R,4293915773);X=t(X,W,V,Y,C[P+1],O,2240044497);Y=t(Y,X,W,V,C[P+8],U,1873313359);V=t(V,Y,X,W,C[P+15],T,4264355552);W=t(W,V,Y,X,C[P+6],R,2734768916);X=t(X,W,V,Y,C[P+13],O,1309151649);Y=t(Y,X,W,V,C[P+4],U,4149444226);V=t(V,Y,X,W,C[P+11],T,3174756917);W=t(W,V,Y,X,C[P+2],R,718787259);X=t(X,W,V,Y,C[P+9],O,3951481745);Y=K(Y,h);X=K(X,E);W=K(W,v);V=K(V,g)}var i=B(Y)+B(X)+B(W)+B(V);return i.toLowerCase()};
 
 //-----------------------------------------------------------------------------
@@ -1520,7 +1602,7 @@ function logDebugGame(sMsg) {
 		}
 		s += '(' + nHidden + ' ' + nVisible +') ';
 	}
-	console.log('Game ' + sMsg + ' ' + s + ' deck=' + deck.cards.length);
+	//console.log('Game ' + sMsg + ' ' + s + ' deck=' + deck.cards.length);
 }
 
 //-----------------------------------------------------------------------------
@@ -1553,48 +1635,19 @@ function reloadGame(sSave) {
 	}
 	// deck
 	deck.cards =  buildCardArray(tabSave[20]);
-	// number of moves
+	// number of moves & easyMode
+	bEasyMode = tabSave[21].substr(0, 1) == '+';
+	document.getElementById('easyChk').checked = bEasyMode;
 	nbMove = Math.round(tabSave[21]);
 	showMoves();
 	// timestamp of game start
 	timestampStart = Math.round(tabSave[22]);
 	showElapsed();
-	// whole suits & check coherence
-	var nCards = new Array(0, 0, 0, 0);
-	for (var iCol = 0; iCol < 11; iCol++) {
-		var oCol;
-		if (iCol == 10) oCol = deck;
-		else            oCol = cols[iCol];
-		for (var iCard = 0, len=oCol.cards.length; iCard < len; iCard++) {
-			switch (oCol.cards[iCard].suit) {
-				case 'C': nCards[0]++; break;
-				case 'D': nCards[1]++; break;
-				case 'H': nCards[2]++; break;
-				case 'S': nCards[3]++; break;
-			}
-		}
-	}
-	for (var iSuit = 0; iSuit < 4; iSuit++) {
-		var e1 = finishedSuits[iSuit * 2];
-		var e2 = finishedSuits[iSuit * 2 + 1];
-		var sColor = (iSuit == 1 || iSuit == 2) ? 'red' : 'black';
-		switch (nCards[iSuit]) {
-			case 26:
-				e1.style.color = 'transparent';
-				e2.style.color = 'transparent';
-				break;
-			case 13:
-				e1.style.color = sColor;
-				e2.style.color = 'transparent';
-				break;
-			case 0:
-				e1.style.color = sColor;
-				e2.style.color = sColor;
-				break;
-			default:
-				console.log('**************reloadGame, internal error, nCards=' + nCards[iSuit] + ' for Suit ' + 'CDHS'.substr(iSuit, 1));
-				return;
-		}
+	// update finished suits & check coherence
+	var sError = oFinishedSuits.update();
+	if (sError) {
+		console.log('**************reloadGame, internal error, ' + sError);
+		return;
 	}
 	// need to save Present
 	oUndo.savePresentSituation(mkStringGame());
@@ -1602,11 +1655,12 @@ function reloadGame(sSave) {
 }
 
 //-----------------------------------------------------------------------------
-// Reload button was pressed
+// Restore button was pressed
 //-----------------------------------------------------------------------------
 function restoreButton() {
 	alert('Drag and drop the file into the game');
 	return;
+	/*
 	if (window.clipboardData && window.clipboardData.getData) {
 		var sRestore = window.clipboardData.getData('Text');
 		if (sRestore.substr(0, 11) != 'ArachnidJS ') {
@@ -1620,6 +1674,7 @@ function restoreButton() {
 		return;
 	}
 	alert('Browser not compliant');
+	*/
 }
 
 //-----------------------------------------------------------------------------
@@ -1648,7 +1703,7 @@ function restoreGame(sGame) {
 	}
 	// actual reloading
 	oUndo.push();
-	if (reloadGame(s)) return;
+	if (reloadGame(s)) return;	// return ik OK
 	oUndo.undoGame();
 	alert('Unable to restore this game');
 }
@@ -1705,7 +1760,7 @@ function saveGame() {
 //-----------------------------------------------------------------------------
 // Check if the 8 suits are whole and on the desk. Show Win message if yes (and return true)
 //-----------------------------------------------------------------------------
-function checkWinGreat() {
+function checkWin() {
 	var stackedWholeSuit = 0;
 	var nWholeSuit = 0;
 	for (var iCol = 0; iCol < 10; iCol++) {
@@ -1713,7 +1768,7 @@ function checkWinGreat() {
 		// If column is empty, skip
 		if (oCol.cards[0] == undefined) continue;
 		// if first card is hidden => not (yet) won
-		//console.log('checkWinGreat, iCol=' + iCol + ', fisrt card visible=' + oCol.cards[0].visible + ', length=' + oCol.cards.length);
+		//console.log('checkWin, iCol=' + iCol + ', fisrt card visible=' + oCol.cards[0].visible + ', length=' + oCol.cards.length);
 		if (oCol.cards[0].visible !== true) return;
 		// check for whole suits
 		for (var iSuit = 0; ; iSuit++) {
@@ -1721,7 +1776,7 @@ function checkWinGreat() {
 			var suit = oCol.cards[iSuit * 13].suit;
 			for (var iRank = 1; iRank <= 13; iRank++) {
 				var oCard = oCol.cards[iSuit * 13 + iRank - 1];
-				//console.log('checkWinGreat, iSuit=' + iSuit + ', iRank=' + iRank + ', card=' + oCard.cardToString());
+				//console.log('checkWin, iSuit=' + iSuit + ', iRank=' + iRank + ', card=' + oCard.cardToString());
 				if (oCard.suit != suit) return;	// not same suit than the first of the 13 cards straight
 				if (oCard.rank != (14-iRank)) return;	// not the good rank
 			}
@@ -1781,19 +1836,15 @@ function initA() {
 		cols[iCol].mkColumn(iCol);
 	}
 	// prepare where the completed suits go
-	var suits = new Array("C", "D", "H", "S");
-	for (j = 0; j < suits.length; j++) {
-		for (k = 1; k <= 2; k++) {
-			var e = document.getElementById('suit' + suits[j] + k);
-			e.style.right = (rightSuits + (j*2 + k) * spacingSuits) + 'px';
-			finishedSuits.push(e);
-		}
-	}
+	oFinishedSuits = new classFinishedSuits();
 	// prepare drag'n drop
 	document.onmousemove = mouseMove;
 	document.onmousedown = mouseDown;
 	document.onmouseup   = mouseUp;
-	initTouchHandler();
+	document.addEventListener("touchstart", touchHandler, true);
+	document.addEventListener("touchmove", touchHandler, true);
+	document.addEventListener("touchend", touchHandler, true);
+	document.addEventListener("touchcancel", touchHandler, true);
 	// viewport resize
 	window.onresize = windowResize;
 	window.orientationChange = windowResize;
@@ -1888,14 +1939,6 @@ function touchHandler(event)
 	first.target.dispatchEvent(simulatedEvent);
 	if (event.type == 'touchmove') event.preventDefault();
 	}
-
-function initTouchHandler() 
-	{
-	document.addEventListener("touchstart", touchHandler, true);
-	document.addEventListener("touchmove", touchHandler, true);
-	document.addEventListener("touchend", touchHandler, true);
-	document.addEventListener("touchcancel", touchHandler, true);    
-}
 
 //-----------------------------------------------------------------------------
 // deal a row
@@ -2101,6 +2144,7 @@ function killTimerElapsed() {
 // new game
 //-----------------------------------------------------------------------------
 function newGame() {
+	bEasyMode = document.getElementById('easyChk').checked;
 	deck.makeDeck(2);
 	// empty deck
 	for (var iCol = 0; iCol < 10; iCol++) cols[iCol].clear();
@@ -2110,7 +2154,8 @@ function newGame() {
 	//testConfig2();
 
 	showDealt();
-	for (var i = 0; i < finishedSuits.length; i++) finishedSuits[i].style.color = 'transparent';
+	var sError = oFinishedSuits.update();
+	if (sError) console.log('**************newGame, internal error, ' + sError);
 	document.getElementById("win").style.display = 'none';
 	timestampStart = +new Date();	// "+" convert date object to timestamp
 	showElapsed();
@@ -2164,6 +2209,7 @@ function mouseDown(ev){
 <div id="restore" class="but" onclick="restoreButton()">Restore</div>
 <div id="undo" class="but" onclick="oUndo.undoGame()">Undo</div>
 <div id="dealt"  class="topinfo"></div>
+<div id="easydiv"><input type="checkbox" id="easyChk" /><br /><label for="easyChk">Easy</label></div>
 <div id="col0" class="column"></div>
 <div id="col1" class="column"></div>
 <div id="col2" class="column"></div>
@@ -2174,14 +2220,14 @@ function mouseDown(ev){
 <div id="col7" class="column"></div>
 <div id="col8" class="column"></div>
 <div id="col9" class="column"></div>
-<div id="suitC1" class="terminatedSuit">♣</div>
-<div id="suitC2" class="terminatedSuit">♣</div>
-<div id="suitD1" class="terminatedSuit red">♦</div>
-<div id="suitD2" class="terminatedSuit red">♦</div>
-<div id="suitH1" class="terminatedSuit red">♥</div>
-<div id="suitH2" class="terminatedSuit red">♥</div>
-<div id="suitS1" class="terminatedSuit">♠</div>
-<div id="suitS2" class="terminatedSuit">♠</div>
+<div id="suit0" class="terminatedSuit">x</div>
+<div id="suit1" class="terminatedSuit">x</div>
+<div id="suit2" class="terminatedSuit">x</div>
+<div id="suit3" class="terminatedSuit">x</div>
+<div id="suit4" class="terminatedSuit">x</div>
+<div id="suit5" class="terminatedSuit">x</div>
+<div id="suit6" class="terminatedSuit">x</div>
+<div id="suit7" class="terminatedSuit">x</div>
 <div id="win" >x</div>
 </div>
 </body>
