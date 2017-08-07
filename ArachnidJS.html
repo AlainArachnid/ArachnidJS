@@ -930,21 +930,10 @@ Stack.prototype.click = function() {
 	if (s.cards.length == 13) {	// whole suit done
 		this.moveStraight(s);	// remove from the desk
 		oFinishedSuits.update();
+		if (!this.unhideLast()) oUndo.push();
+		incMove();
+		oUndo.savePresentSituation(mkStringGame());
 		return;
-		/* to be deleted
-		var suit = s.cards[0].suit;
-		for (var i = 0; i < finishedSuits.length; i++) {
-			//console.log('click, test full suit=' + suit + ', i=' + i +', suit tested=' + finishedSuits[i].id.substr(4, 1) + ', color=' + finishedSuits[i].style.color);
-			if (finishedSuits[i].id.substr(4, 1) != suit) continue;
-			if (finishedSuits[i].style.color == 'red' || finishedSuits[i].style.color == 'black') continue;
-			finishedSuits[i].style.color = (suit == 'H' || suit == 'D') ? 'red' : 'black';
-			this.moveStraight(s);	// remove from the desk
-			if (!this.unhideLast()) oUndo.push();
-			incMove();
-			oUndo.savePresentSituation(mkStringGame());
-			return;
-		}
-		*/
 	}
 	s.flashAll();	// tell player there was no suitable destination
 }
@@ -1067,6 +1056,7 @@ Stack.prototype.mkSaveString = function(bCol) {
 		}
 		sSave += oCard.cardToChar();
 	}
+	if (bHidden) sSave += ' ';	// does not happen except for some testing
 	return sSave;
 }
 
@@ -1103,6 +1093,7 @@ function DragDrop(ev) {	// arg : event of the mouseDown
 	}
 	// find column if any
 	if (!this.oCol) return;
+	// pbChromeAndroid if (ev.preventDefault) ev.preventDefault();
 	var mousePos = mouseCoords(ev);
 	this.xOffset = this.oCol.elt.offsetLeft - mousePos.x;
 	switch (ev.button) {
@@ -1163,6 +1154,7 @@ DragDrop.prototype.mouseUp = function(ev) {
 		var higherCard = this.straight.cards[this.straight.cards.length - 1];
 		if (newCol.isSuitable(higherCard, 99)) {
 			newCol.dropStraight(this.straight);
+			this.oCol.respace();
 			if (!this.oCol.unhideLast()) oUndo.push();
 			incMove();
 			oUndo.savePresentSituation(mkStringGame());
@@ -1173,6 +1165,7 @@ DragDrop.prototype.mouseUp = function(ev) {
 		}
 	}
 	if (ev.button == 2 && ev.preventDefault) ev.preventDefault();
+	// pbChromeAndroid if (ev.preventDefault) ev.preventDefault();
 	ddrop = undefined;
 }
 
@@ -1256,9 +1249,10 @@ function classUndo() {
 // debug into console
 //-----------------------------------------------------------------------------
 classUndo.prototype.logDebug = function(sMsg) {
-	console.log('classUndo, ' + sMsg + ', undoBuffer.length=' + this.undoBuffer.length + ', presentSituation=' + this.presentSituation);
+	var s = 'classUndo _____________________, ' + sMsg + ', undoBuffer.length=' + this.undoBuffer.length + ', presentSituation=' + this.presentSituation;
 	for (var i = 0; i < this.undoBuffer.length; i++)
-		console.log('classUndo, undoBuffer[' + i + ']=' + this.undoBuffer[i]);
+		s += "\n\tundoBuffer[" + i + ']=' + this.undoBuffer[i];
+	console.log(s);
 }
 
 //-----------------------------------------------------------------------------
@@ -1312,6 +1306,7 @@ classUndo.prototype.clear = function() {
 			});
 	}
 	this.disableButton();
+	//this.logDebug('clear');
 	//document.getElementById('log').firstChild.textContent = document.cookie;
 }
 
@@ -2017,7 +2012,7 @@ function normalGame() {
 }
 
 //-----------------------------------------------------------------------------
-// configuration to test end of game (win)
+// configuration for testing end of game (win)
 //-----------------------------------------------------------------------------
 function testConfig1() {
 	// fill 8 cols
@@ -2037,16 +2032,16 @@ function testConfig1() {
 }
 
 //-----------------------------------------------------------------------------
-// configuration to test full suit above other cards
+// configuration for testing full suit above other cards
 //-----------------------------------------------------------------------------
-function testConfig2() {
+function testConfig2(bHide) {
 	// fill 5 cols
 	for (var iCol = 0; iCol < 5; iCol++) {
 		// fill with 13 cards
 		for (var iCard = 0; iCard < 13; iCard++) {
 			var oCard = deck.deal();	// get next dealed card
 			cols[iCol].addCard(oCard);
-			oCard.unhide();
+			if (!bHide) oCard.unhide();
 		}
 		cols[iCol].respace();
 	}
@@ -2151,7 +2146,7 @@ function newGame() {
 
 	normalGame();
 	//testConfig1();
-	//testConfig2();
+	//testConfig2(false);
 
 	showDealt();
 	var sError = oFinishedSuits.update();
