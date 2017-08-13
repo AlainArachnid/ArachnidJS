@@ -18,6 +18,7 @@
 /******************************************************************************
 * TODO
 * restore
+* fix bug on chrome/android
 * 
 ******************************************************************************/
 
@@ -279,6 +280,9 @@ html, body {
 * http://www.brainjar.com/common/viewsource.asp?source=\js\cards\cards.js     *
 * Release under GPL xxxxx                            .                        *
 ******************************************************************************/
+
+// Config
+const ALLOW_UNDO_HIDE_EASYMODE = true;
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Documentation on JS objects
@@ -920,7 +924,7 @@ Stack.prototype.click = function() {
 			if (!col.isSuitable(higherCard, myMode)) continue;
 			// got a suitable destination, do the move
 			this.moveStraight(s, col);
-			if (!this.unhideLast()) oUndo.push();
+			if ((!this.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 			incMove();
 			oUndo.savePresentSituation(mkStringGame());
 			if (checkWin()) return;
@@ -930,7 +934,7 @@ Stack.prototype.click = function() {
 	if (s.cards.length == 13) {	// whole suit done
 		this.moveStraight(s);	// remove from the desk
 		oFinishedSuits.update();
-		if (!this.unhideLast()) oUndo.push();
+		if ((!this.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 		incMove();
 		oUndo.savePresentSituation(mkStringGame());
 		return;
@@ -975,7 +979,7 @@ Stack.prototype.unhideLast = function() {
 	if (c == undefined) return;
 	if (c.visible) return;
 	c.unhide();
-	oUndo.clear();	// no undo beyond this point
+	if (!(ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.clear();	// no undo beyond this point
 	return true;
 }
 
@@ -1056,7 +1060,7 @@ Stack.prototype.mkSaveString = function(bCol) {
 		}
 		sSave += oCard.cardToChar();
 	}
-	if (bHidden) sSave += ' ';	// does not happen except for some testing
+	if (bHidden && bCol) sSave += ' ';	// does not happen except for some testing
 	return sSave;
 }
 
@@ -1155,7 +1159,7 @@ DragDrop.prototype.mouseUp = function(ev) {
 		if (newCol.isSuitable(higherCard, 99)) {
 			newCol.dropStraight(this.straight);
 			this.oCol.respace();
-			if (!this.oCol.unhideLast()) oUndo.push();
+			if ((!this.oCol.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 			incMove();
 			oUndo.savePresentSituation(mkStringGame());
 			//console.log('DragDrop.mouseUp, drop here');
@@ -1205,7 +1209,7 @@ DragDrop.prototype.moveTo = function(pos) {
 //	undoBuffer
 //=============================================================================
 //-----------------------------------------------------------------------------
-// undo : initialize and load from local storage
+// undo : initialize and load from local storage or cookies
 //-----------------------------------------------------------------------------
 function classUndo() {
 	this.undoBuffer = new Array();
@@ -1630,6 +1634,7 @@ function reloadGame(sSave) {
 	}
 	// deck
 	deck.cards =  buildCardArray(tabSave[20]);
+	//console.log('reloadGame, tabSave ' + tabSave[20] + '---' + tabSave[21] + '---' + tabSave[22]);
 	// number of moves & easyMode
 	bEasyMode = tabSave[21].substr(0, 1) == '+';
 	document.getElementById('easyChk').checked = bEasyMode;
