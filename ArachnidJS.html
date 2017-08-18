@@ -1428,7 +1428,7 @@ classFinishedSuits.prototype.update = function() {
 		} else {
 			var tabElt = new Array(this.tabFinishedSuits[iSuit * 2],
 								this.tabFinishedSuits[iSuit * 2 + 1]);
-			var sColor = (iSuit == 1 || iSuit == 2) ? 'red' : 'black';
+			var sColor = (iSuit == 1 || iSuit == 2) ? 'black' : 'red';
 			var maxAllowed = 26;
 		}
 		if (nCards[iSuit] > maxAllowed) return 'nCards=' + nCards[iSuit] + ' for Suit ' + 'HSCD'.substr(iSuit, 1);
