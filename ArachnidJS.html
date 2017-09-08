@@ -3,8 +3,6 @@
 <head>
 	<title>Arachnid</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-	<!-- icon extracted from the legacy 16 bits arachnid.exe -->
-	<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAICAQAAEABADoAgAAFgAAACgAAAAgAAAAQAAAAAEABAAAAAAAgAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACAAAAAgIAAgAAAAIAAgACAgAAAgICAAMDAwAAAAP8AAP8AAAD//wD/AAAA/wD/AP//AAD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////AAAAAAAAAAAAD//////5nwAAAAAAAAAAAA//////+Z8AAAAAAAAAAAAP///5//mfAAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA//+ZmZ//8AAAAAAAAAAAAP//+Zn///AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA///5mf//8AAAAAAAAAAAAP//mZmf//AAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA+Z//n///8AAAAAAAAAAAAPmf//////AAAAAAAAAAAAD5n//////wAAAAAAAAAAAA////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//////////////////////4AA//+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP///////////wAAAAAAAAAAAADC3G9ouH8AAMrcb2i4fwAAAAAAAAEBAAAwAwAAAAA=" />
 	<style type="text/css">
 /******************************************************************************
 * ArachnidJS                                                                  *
@@ -19,9 +17,12 @@
 * TODO
 * restore
 * fix bug on chrome/android
-* 
+* manual
 ******************************************************************************/
-
+	</style>
+	<!-- icon extracted from the legacy 16 bits arachnid.exe -->
+	<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAICAQAAEABADoAgAAFgAAACgAAAAgAAAAQAAAAAEABAAAAAAAgAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACAAAAAgIAAgAAAAIAAgACAgAAAgICAAMDAwAAAAP8AAP8AAAD//wD/AAAA/wD/AP//AAD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////AAAAAAAAAAAAD//////5nwAAAAAAAAAAAA//////+Z8AAAAAAAAAAAAP///5//mfAAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA//+ZmZ//8AAAAAAAAAAAAP//+Zn///AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD////////wAAAAAAAAAAAA////////8AAAAAAAAAAAAP////////AAAAAAAAAAAAD///+f///wAAAAAAAAAAAA///5mf//8AAAAAAAAAAAAP//mZmf//AAAAAAAAAAAAD///mZ///wAAAAAAAAAAAA+Z//n///8AAAAAAAAAAAAPmf//////AAAAAAAAAAAAD5n//////wAAAAAAAAAAAA////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//////////////////////4AA//+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP/vgAD774AA++8AAHv2gAC3+YAAz/+AAP///////////wAAAAAAAAAAAADC3G9ouH8AAMrcb2i4fwAAAAAAAAEBAAAwAwAAAAA=" />
+	<style type="text/css">
 html, body {
 	height:100%;
 	margin:0px;
@@ -269,7 +270,6 @@ html, body {
 .spotC5 { position: absolute; left: 2.50em; top: 3.5em; }
 	</style>
 	<script>
-
 /******************************************************************************
 * ArachnidJS                                                                  *
 *                                                                             *
@@ -907,7 +907,7 @@ Stack.prototype.findBottomStraight = function(oBaseCard) {
 // handle the click event on column
 //-----------------------------------------------------------------------------
 Stack.prototype.click = function() {
-	var iCol, card, s, higherCard, myMode, iCol, col;
+	var iCol, deltaCol, card, s, higherCard, myMode, oCol;
 	//find last card and its straight
 	s = this.findBottomStraight();
 	if (s == undefined) {
@@ -919,11 +919,13 @@ Stack.prototype.click = function() {
 	higherCard = s.cards[s.cards.length - 1];
 	for (myMode = 0; myMode < 3; myMode++) { // first try : same suit, then any suit, then empty columns
 		if (myMode == 2 && s.cards.length == 13 && this.cards.length == 13) continue;	// don't move a full suit alone from one column to another
-		for (iCol = 0; iCol < 10; iCol++) {
-			col = cols[iCol];
-			if (!col.isSuitable(higherCard, myMode)) continue;
+		for (deltaCol = 1; deltaCol < 10; deltaCol++) {	// try each other column begining with the column right from this one
+			iCol = this.n + deltaCol;
+			if (iCol >= 10) iCol -= 10;
+			oCol = cols[iCol];
+			if (!oCol.isSuitable(higherCard, myMode)) continue;
 			// got a suitable destination, do the move
-			this.moveStraight(s, col);
+			this.moveStraight(s, oCol);
 			if ((!this.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 			incMove();
 			oUndo.savePresentSituation(mkStringGame());
