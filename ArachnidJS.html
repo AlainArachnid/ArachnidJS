@@ -928,6 +928,7 @@ Stack.prototype.click = function() {
 			this.moveStraight(s, oCol);
 			if ((!this.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 			incMove();
+			showDealt();
 			oUndo.savePresentSituation(mkStringGame());
 			if (checkWin()) return;
 			return;
@@ -938,6 +939,7 @@ Stack.prototype.click = function() {
 		oFinishedSuits.update();
 		if ((!this.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 		incMove();
+		showDealt();
 		oUndo.savePresentSituation(mkStringGame());
 		return;
 	}
@@ -1163,6 +1165,7 @@ DragDrop.prototype.mouseUp = function(ev) {
 			this.oCol.respace();
 			if ((!this.oCol.unhideLast()) || (ALLOW_UNDO_HIDE_EASYMODE && bEasyMode)) oUndo.push();
 			incMove();
+			showDealt();
 			oUndo.savePresentSituation(mkStringGame());
 			//console.log('DragDrop.mouseUp, drop here');
 		} else {
@@ -1976,9 +1979,11 @@ function dealRow() {
 //-----------------------------------------------------------------------------
 // gray undo button
 //-----------------------------------------------------------------------------
-function disableDealtButton() {
+function disableDealtButton(hasEmptyCol) {
 	var elt = document.getElementById('deal');
 	elt.className = 'butGrayed';
+	if (hasEmptyCol) elt.title = 'Cannot deal when there is an empty column';
+	else             elt.removeAttribute('title');
 }
 
 //-----------------------------------------------------------------------------
@@ -1987,16 +1992,21 @@ function disableDealtButton() {
 function enableDealtButton() {
 	var elt = document.getElementById('deal');
 	elt.className = 'but';
+	elt.removeAttribute('title');
 }
 
 //-----------------------------------------------------------------------------
-// display the count of already dealt
+// display the count of already dealt + gray/ungray the button
 //-----------------------------------------------------------------------------
 function showDealt() {
 	var nLeft = deck.cardCount()/10;
+	var hasEmptyCol = false;
+	for (var iCol = 0; iCol < 10; iCol++) {
+		if (cols[iCol].cards.length == 0) {hasEmptyCol = true; break;}
+	}
 	document.getElementById('dealt').innerHTML = (5-nLeft) + '/5';
-	if (nLeft <= 0) disableDealtButton();
-	else        enableDealtButton();
+	if (hasEmptyCol || nLeft <= 0) disableDealtButton(hasEmptyCol);
+	else          enableDealtButton();
 }
 
 //-----------------------------------------------------------------------------
