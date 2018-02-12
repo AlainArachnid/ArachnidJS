@@ -59,14 +59,20 @@ html, body {
 
 .but {
 	background-color: #D0D0D0;
+	top: 10px;
+	border-radius: 10px;
 }
 
 .butFlashed {
 	background-color: black;
+	top: 10px;
+	border-radius: 10px;
 }
 
 .butGrayed {
 	background-color: #808080;
+	top: 10px;
+	border-radius: 10px;
 }
 
 .topinfo {
@@ -77,15 +83,11 @@ html, body {
 }
 
 #deal {
-	top: 10px;
 	left: 10px;
-	border-radius: 10px;
 }
 
 #new {
-	top: 10px;
 	right: 20px;
-	border-radius: 10px;
 }
 
 #easydiv {
@@ -97,21 +99,20 @@ html, body {
 }
 
 #save {
-	top: 10px;
-	left: 340px;
-	border-radius: 10px;
+	left: 330px;
 }
 
 #restore {
-	top: 10px;
-	left: 410px;
-	border-radius: 10px;
+	left: 390px;
 }
 
 #undo {
-	top: 10px;
-	left: 500px;
-	border-radius: 10px;
+	left: 470px;
+}
+
+#help {
+	left: 530px;
+	background-color: #40C040;
 }
 
 #dealt {
@@ -134,7 +135,7 @@ html, body {
 	display: none;
 	left: 0;
 	right: 0;
-	 margin-left: auto; 
+	margin-left: auto; 
 	margin-right: auto; 
 	top: 120px;
 	xleft: 300px;
@@ -144,6 +145,28 @@ html, body {
 	z-index: 99999;
 	background-color: purple;
 	color: white;
+}
+
+#help-all {
+	position: absolute;
+	border: solid blue 2px;
+	display: none;
+	left: 50;
+	right: 50;
+	top: 50px;
+	margin: 15px;
+	padding : 10px;
+	font-size: 20px;
+	z-index: 99999;
+	background-color: #40C040;
+	color: white;
+}
+
+#help-close {
+	position: absolute;
+	top: 0;
+	right: 5px;
+	cursor: pointer;
 }
 
 .column {
@@ -2189,6 +2212,19 @@ function windowResize(ev){
 }
 
 //-----------------------------------------------------------------------------
+// help
+//-----------------------------------------------------------------------------
+function hideHelp() {
+	document.getElementById('help-all').style.display = 'none';
+}
+
+function showHelp() {
+	var e = document.getElementById('help-all');
+	if (e.style.display == 'block') e.style.display = 'none';
+	else                            e.style.display = 'block';
+}
+
+//-----------------------------------------------------------------------------
 // mouse event handlers
 //-----------------------------------------------------------------------------
 function mouseUp(ev){
@@ -2220,6 +2256,7 @@ function mouseDown(ev){
 <div id="save" class="but" onclick="saveGame()">Save</div>
 <div id="restore" class="but" onclick="restoreButton()">Restore</div>
 <div id="undo" class="but" onclick="oUndo.undoGame()">Undo</div>
+<div id="help" class="but" onclick="showHelp()">Help</div>
 <div id="dealt"  class="topinfo"></div>
 <div id="easydiv"><input type="checkbox" id="easyChk" /><br /><label for="easyChk">Easy</label></div>
 <div id="col0" class="column"></div>
@@ -2241,6 +2278,36 @@ function mouseDown(ev){
 <div id="suit6" class="terminatedSuit">x</div>
 <div id="suit7" class="terminatedSuit">x</div>
 <div id="win" >x</div>
+<div id="help-all" onclick="hideHelp()">
+	<div id="help-close">X</div>
+	<div id="help-en">
+Help not available in English. Please, help.
+	</div>
+	<div id="help-fr">
+<ul>
+<li>Le but est de reconstituer les 8 couleurs dans l'ordre Roi => As.</li>
+<li>On ne peut déplacer que des blocs consécutifs dans la même couleur.</li>
+<li>On ne peut amener un bloc que sous une carte de valeur juste au-dessus de la première carte du bloc (pas nécessairement de la même couleur) ou vers une colonne vide.</li>
+<li>Cliquer sur une colonne pour déplacer un bloc vers une destination possible. Le bloc flashe s'il n'y a pas de destination acceptable.</li>
+<li>Une suite complète sera envoyée dans la zone de stockage (case en haut) et enlevée du tapis, s'il n'y a pas de colonne vide. Il y a un bonus pour une partie gagnée sans utiliser la zone de stockage.</li>
+<li>Il est possible aussi d'amener un bloc vers un endroit possible en le déplaçant avec la souris.</li>
+<li>Il est possible de couper un bloc constitué. Pour cela, cliquer avec le deuxième bouton de la souris (bouton de droite pour les droitiers) à l'endroit où l'on souhaite opérer la séparation.</li>
+<li>Le bouton «Deal row» permet de distribuer une nouvelle carte sur chaque colonne. Il faudra distribuer 5 fois pour amener la totalité des 2 jeux de 52 cartes sur le tapis.</li>
+<li>Le bouton «Undo» permet d'annuler les déplacements précédents. S'il n'est pas possible d'annuler, ce bouton est grisé. Il n'est pas possible d'annuler si&nbsp;:
+<ul>
+<li>Un déplacement a révélé une carte.</li>
+<li>Une distribution vient d'avoir lieu.</li>
+<li><i>Il est possible d'annuler si on vient de lancer par erreur une nouvelle partie. Dans ce cas, la partie précédente est affichée là où elle en était. La nouvelle partie est irrémédiablement perdue.</i></li>
+</ul></li>
+<li>Il y a un bonus pour une partie gagnée sans valider de couleur. Et encore plus si une suite se trouve sur une autre suite.</li>
+<li>Le mode «Easy» (facile) a les caractéristiques suivantes:
+<ul>
+<li>Utilisation de 4 x 2 couleurs (cœur et pique) au lieu de 2 x 4 couleurs.</li>
+<li>Possibilité d'annuler même après avoir révélé une carte.</li>
+</ul></li>
+</ul>
+	</div>
+</div>
 </div>
 </body>
 </html>
