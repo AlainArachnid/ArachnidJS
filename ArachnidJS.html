@@ -44,7 +44,7 @@ html, body {
 	-ms-touch-action: none;
 }
 
-#log {
+#logdebug {
 	position: absolute;
 	bottom: 0;
 	left: 0;
@@ -1946,12 +1946,15 @@ function touchHandler(event)
 	var touches = event.changedTouches,
 		first = touches[0],
 		type = "";
+	//logScreen('Enter touchHandler ' + event.type + ' y=' + first.clientY);
 	switch(event.type)
 	{
 		case "touchstart": type = "mousedown"; break;
 		case "touchmove":  type = "mousemove"; break;
 		case "touchend":   type = "mouseup";   break;
-		default:           return;
+		default:
+			//logScreen('Exit touchHandler, ignored');
+			return;
 	}
 
 	// initMouseEvent(type, canBubble, cancelable, view, clickCount, 
@@ -1965,7 +1968,19 @@ function touchHandler(event)
 								  false, false, false, 2/*right*/, null);
 
 	first.target.dispatchEvent(simulatedEvent);
-	if (event.type == 'touchmove') event.preventDefault();
+	if (event.type == 'touchmove') {
+		event.preventDefault();
+	} else if (first.clientY < 50) {
+		// don't prevent default, need the touch to be converted to a "click"
+	} else {
+		var eHelp = document.getElementById('help-all');
+		if (eHelp.style.display == 'block') {
+			// don't prevent default, need the touch to be converted to a "click"
+		} else if (!ddrop) {
+			event.preventDefault();	// avoid getting the "click" twice
+		}
+	}
+	//logScreen('Exit touchHandler');
 	}
 
 //-----------------------------------------------------------------------------
@@ -2228,11 +2243,13 @@ function showHelp() {
 // mouse event handlers
 //-----------------------------------------------------------------------------
 function mouseUp(ev){
+	//logScreen('Enter mouseUp');
 	if (ddrop) {
 		ddrop.mouseUp(ev);
 		//console.log('delete ddrop');
 	}
 	ddrop = undefined;
+	//logScreen('Exit mouseUp');
 }
 
 function mouseMove(ev){
@@ -2240,7 +2257,15 @@ function mouseMove(ev){
 }
 
 function mouseDown(ev){
+	//logScreen('Enter mouseDown');
 	if (!ddrop) ddrop = new DragDrop(ev);
+	//logScreen('Exit mouseDown');
+}
+
+function logScreen(msg) {
+	var eLog = document.getElementById('logdebug');
+	eLog.appendChild(document.createElement('BR'));
+	eLog.appendChild(document.createTextNode(msg));
 }
 
 	</script>
@@ -2248,7 +2273,7 @@ function mouseDown(ev){
 <body onload="initA();">
 &nbsp;
 <div id="bkground">
-<div id="log">&nbsp;</div>
+<div id="logdebug">&nbsp;</div>
 <div id="deal" class="but" onclick="dealRow()">Deal row</div>
 <div id="new"  class="but" onclick="newGame()">New game</div>
 <div id="elapsed" class="topinfo">0 s</div>
