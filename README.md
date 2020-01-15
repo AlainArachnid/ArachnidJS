@@ -11,12 +11,13 @@ The development follows the following rules:
 - stick as much as possible to the original arachnid.exe (windows 3.1) game
 - however, add some nice options
 
-To play:
+You can play here:
 https://rawgit.com/AlainArachnid/ArachnidJS/master/ArachnidJS.html
+or here:
+http://alainarachnid.free.fr/ArachnidJS.html
 
 08/09/2017 the game is finished.
 Known issues:
 - Restoring saved games by drag'n drop, could be better
-- bug: "touch screen" on android/chrome taken twice
 
 Alain
